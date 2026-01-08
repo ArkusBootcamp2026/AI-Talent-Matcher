@@ -9,5 +9,5 @@ python-jose
 pydantic[email]
 pydantic-settings
 langchain-openai
-langchain
+langchain-core
 openai
