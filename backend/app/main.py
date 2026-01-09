@@ -1,9 +1,16 @@
 # Main application entry point
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, me, jobs, applications, candidate_profiles, recruiter_profiles, llm
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 app = FastAPI(title="AI Talent Matcher API")
 

@@ -13,13 +13,18 @@ Guarantees:
 - All access is enforced by RLS and ownership constraints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from supabase import Client
 from postgrest.exceptions import APIError
+from typing import Optional
 
 from app.api.deps import get_current_user, require_recruiter
 from app.db.supabase import get_supabase
 from app.schemas.application import ApplicationCreate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/applications",
@@ -47,57 +52,277 @@ def apply_to_job(
     """
 
     # ------------------------------------------------------------------
-    # 1. Validate job exists and is open
-    # ------------------------------------------------------------------
-    job_response = (
-        supabase.table("job_position")
-        .select("id, status")
-        .eq("id", payload.job_position_id)
-        .maybe_single()
-        .execute()
-    )
-
-    if job_response.data is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Job position not found",
-        )
-
-    if job_response.data["status"] != "open":
-        raise HTTPException(
-            status_code=400,
-            detail="You cannot apply to a closed job",
-        )
-
-    # ------------------------------------------------------------------
-    # 2. Create application
+    # 1. Validate candidate profile exists
     # ------------------------------------------------------------------
     try:
-        response = (
-            supabase.table("applications")
-            .insert(
-                {
-                    "candidate_profile_id": user_id,
-                    "job_position_id": payload.job_position_id,
-                    "cover_letter": payload.cover_letter,
-                }
-            )
+        candidate_profile = (
+            supabase.table("candidate_profiles")
+            .select("profile_id")
+            .eq("profile_id", user_id)
+            .maybe_single()
             .execute()
         )
 
-    except Exception as exc:
-        # Unique constraint (candidate already applied)
-        if "uq_candidate_job_application" in str(exc):
+        if candidate_profile is None:
+            logger.error(f"Candidate profile check returned None for user_id: {user_id}")
             raise HTTPException(
-                status_code=409,
-                detail="You have already applied to this job",
+                status_code=500,
+                detail="Failed to validate candidate profile - no response from database",
             )
-
+        
+        if not hasattr(candidate_profile, 'data'):
+            logger.error(f"Candidate profile check returned invalid response structure for user_id: {user_id}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to validate candidate profile - invalid response structure",
+            )
+        
+        if candidate_profile.data is None:
+            logger.warning(f"Candidate profile not found for user_id: {user_id}")
+            raise HTTPException(
+                status_code=400,
+                detail="Candidate profile not found. Please complete your profile first.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Exception validating candidate profile for user_id {user_id}: {type(exc).__name__}: {str(exc)}")
         raise HTTPException(
             status_code=400,
-            detail="Failed to create application",
+            detail=f"Failed to validate candidate profile: {str(exc)}",
         )
 
+    # ------------------------------------------------------------------
+    # 2. Validate job exists and is open
+    # ------------------------------------------------------------------
+    try:
+        job_response = (
+            supabase.table("job_position")
+            .select("id, status")
+            .eq("id", payload.job_position_id)
+            .maybe_single()
+            .execute()
+        )
+
+        if job_response is None:
+            logger.error(f"Job check returned None for job_id: {payload.job_position_id}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to validate job position - no response from database",
+            )
+        
+        if not hasattr(job_response, 'data'):
+            logger.error(f"Job check returned invalid response structure for job_id: {payload.job_position_id}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to validate job position - invalid response structure",
+            )
+        
+        if job_response.data is None:
+            logger.warning(f"Job position not found for job_id: {payload.job_position_id}")
+            raise HTTPException(
+                status_code=404,
+                detail="Job position not found",
+            )
+
+        if job_response.data.get("status") != "open":
+            logger.warning(f"Attempt to apply to closed job: job_id={payload.job_position_id}, status={job_response.data.get('status')}")
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot apply to a closed job",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Exception validating job position for job_id {payload.job_position_id}: {type(exc).__name__}: {str(exc)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to validate job position: {str(exc)}",
+        )
+
+    # ------------------------------------------------------------------
+    # 3. Check if application already exists
+    # ------------------------------------------------------------------
+    try:
+        # Use normal query instead of maybe_single() to avoid 406 errors with multiple filters
+        existing_app_response = (
+            supabase.table("applications")
+            .select("id, status")
+            .eq("candidate_profile_id", user_id)
+            .eq("job_position_id", payload.job_position_id)
+            .limit(1)
+            .execute()
+        )
+        
+        if existing_app_response is None:
+            logger.error(f"Existing application check returned None for user_id: {user_id}, job_id: {payload.job_position_id}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to check existing application - no response from database",
+            )
+        
+        if not hasattr(existing_app_response, 'data'):
+            logger.error(f"Existing application check returned invalid response structure for user_id: {user_id}, job_id: {payload.job_position_id}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to check existing application - invalid response structure",
+            )
+        
+        # Check if any applications exist
+        existing_app_data = existing_app_response.data[0] if existing_app_response.data and len(existing_app_response.data) > 0 else None
+        
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Exception checking existing application: {type(exc).__name__}: {str(exc)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to check existing application: {str(exc)}",
+        )
+
+    # ------------------------------------------------------------------
+    # 4. Create or update application
+    # ------------------------------------------------------------------
+    response = None
+    try:
+        # Check if application exists
+        # existing_app_data will be None if no application found (normal case)
+        # existing_app_data will be a dict if application exists
+        if existing_app_data is not None:
+            logger.info(f"Application exists for user_id: {user_id}, job_id: {payload.job_position_id}, updating...")
+            # Application exists - update it
+            app_data = existing_app_data
+            if not isinstance(app_data, dict):
+                logger.error(f"Existing application data is not a dict: {type(app_data)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Invalid application data structure",
+                )
+            
+            update_data = {}
+            if payload.cover_letter is not None:
+                cover_letter_str = str(payload.cover_letter).strip()
+                if cover_letter_str:
+                    update_data["cover_letter"] = cover_letter_str
+            # If status was withdrawn, allow re-application by resetting to 'applied'
+            if app_data.get("status") == "withdrawn":
+                update_data["status"] = "applied"
+            
+            # Note: updated_at has a default of now() in the database, so we don't need to set it
+            # If we need to update it explicitly, we would use datetime.now().isoformat()
+
+            if not update_data:
+                # No changes to make, fetch full application data and return it
+                logger.info(f"No changes to make for existing application, fetching full data...")
+                full_app_response = (
+                    supabase.table("applications")
+                    .select("*")
+                    .eq("id", app_data["id"])
+                    .maybe_single()
+                    .execute()
+                )
+                if full_app_response and full_app_response.data:
+                    return full_app_response.data
+                return app_data
+
+            logger.info(f"Updating application with data: {update_data}")
+            response = (
+                supabase.table("applications")
+                .update(update_data)
+                .eq("id", app_data["id"])
+                .execute()
+            )
+        else:
+            # Application doesn't exist - create it
+            logger.info(f"Creating new application for user_id: {user_id}, job_id: {payload.job_position_id}")
+            insert_data = {
+                "candidate_profile_id": user_id,
+                "job_position_id": payload.job_position_id,
+                "status": "applied",
+            }
+            
+            # Only include cover_letter if it's provided and not None/empty
+            if payload.cover_letter is not None:
+                cover_letter_str = str(payload.cover_letter).strip()
+                if cover_letter_str:
+                    insert_data["cover_letter"] = cover_letter_str
+            
+            logger.info(f"Inserting application with data: {insert_data}")
+            response = (
+                supabase.table("applications")
+                .insert(insert_data)
+                .execute()
+            )
+            logger.info(f"Insert response received: {response is not None}, has data: {hasattr(response, 'data') if response else False}, data type: {type(response.data) if response and hasattr(response, 'data') else 'N/A'}")
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        error_msg = str(exc)
+        error_type = type(exc).__name__
+        error_lower = error_msg.lower()
+        
+        # Log the full error for debugging
+        logger.error(f"Error creating/updating application: {error_type}: {error_msg}")
+        
+        # Check for foreign key constraint violation
+        if "foreign key" in error_lower or "candidate_profile" in error_lower:
+            raise HTTPException(
+                status_code=400,
+                detail="Candidate profile not found. Please complete your profile first.",
+            )
+        
+        # Check for unique constraint violation (already applied)
+        if "unique" in error_lower or "uq_candidate_job_application" in error_lower:
+            raise HTTPException(
+                status_code=409,
+                detail="You have already applied to this job.",
+            )
+        
+        # Check for check constraint violation (invalid status)
+        if "check constraint" in error_lower or "applications_status_check" in error_lower:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid application status. Allowed values: applied, reviewing, shortlisted, rejected, hired, withdrawn",
+            )
+        
+        # Generic error with more context
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create/update application: {error_msg}",
+        )
+
+    # Validate response
+    if response is None:
+        logger.error("Response from insert/update is None")
+        raise HTTPException(
+            status_code=500,
+            detail="No response from database",
+        )
+
+    if not hasattr(response, 'data'):
+        logger.error(f"Response object missing 'data' attribute. Response type: {type(response)}, attributes: {dir(response)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Application was not created/updated - invalid response structure",
+        )
+    
+    if response.data is None:
+        logger.error("Response.data is None")
+        raise HTTPException(
+            status_code=500,
+            detail="Application was not created/updated - response data is None",
+        )
+
+    if not response.data:
+        logger.error(f"Response.data is empty. Type: {type(response.data)}, Value: {response.data}")
+        raise HTTPException(
+            status_code=500,
+            detail="Application was not created/updated - empty response",
+        )
+
+    # response.data is a list, get the first element
+    logger.info(f"Application successfully created/updated. Response data length: {len(response.data)}")
     return response.data[0]
 
 
@@ -215,6 +440,124 @@ def withdraw_application(
 # Recruiter-side endpoints
 # ---------------------------------------------------------------------
 
+@router.get("/recruiter/applications")
+def get_all_applications_for_recruiter(
+    job_id: Optional[int] = Query(None),
+    recruiter=Depends(require_recruiter),
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Returns all applications for jobs owned by the recruiter.
+    If job_id is provided, returns applications for that specific job only.
+    
+    Notes:
+    ------
+    - Recruiters can only access applications for jobs they own
+    - Candidate data is exposed only through applications
+    """
+    # If job_id is provided, verify ownership
+    if job_id:
+        job_check = (
+            supabase.table("job_position")
+            .select("id")
+            .eq("id", job_id)
+            .eq("recruiter_profile_id", recruiter["id"])
+            .maybe_single()
+            .execute()
+        )
+        if not job_check.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found or not authorized",
+            )
+
+    try:
+        # First, get all job IDs and titles owned by recruiter
+        jobs_response = (
+            supabase.table("job_position")
+            .select("id, job_title")
+            .eq("recruiter_profile_id", recruiter["id"])
+            .execute()
+        )
+        
+        if not jobs_response.data:
+            return []
+        
+        job_ids = [job["id"] for job in jobs_response.data]
+        job_titles_map = {job["id"]: job["job_title"] for job in jobs_response.data}
+        
+        if job_id:
+            job_ids = [job_id]  # Filter to specific job if provided
+        
+        # Fetch applications for these jobs
+        response = (
+            supabase.table("applications")
+            .select(
+                """
+                id,
+                status,
+                applied_at,
+                cover_letter,
+                job_position_id,
+                candidate_profiles (
+                    profile_id,
+                    location,
+                    last_upload_file,
+                    profiles (
+                        id,
+                        full_name
+                    )
+                )
+                """
+            )
+            .in_("job_position_id", job_ids)
+            .order("applied_at", desc=True)
+            .execute()
+        )
+        
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to fetch applications: {exc}",
+        )
+
+    applications = []
+
+    for row in response.data or []:
+        candidate_profile = row.get("candidate_profiles") or {}
+        profile = candidate_profile.get("profiles") or {}
+
+        # Map status for UI: "applied" -> "new", "reviewing" -> "reviewed", "hired" -> "accepted"
+        status = row["status"]
+        display_status = status
+        if status == "applied":
+            display_status = "new"
+        elif status == "reviewing":
+            display_status = "reviewed"
+        elif status == "hired":
+            display_status = "accepted"
+
+        applications.append(
+            {
+                "application_id": row["id"],
+                "status": status,  # Keep original status for API operations
+                "display_status": display_status,  # UI-friendly status
+                "applied_at": row["applied_at"],
+                "cover_letter": row["cover_letter"],
+                "job_position_id": row["job_position_id"],
+                "job_title": job_titles_map.get(row["job_position_id"], ""),
+                "candidate": {
+                    "id": profile.get("id"),
+                    "full_name": profile.get("full_name"),
+                    "location": candidate_profile.get("location"),
+                    "last_upload_file": candidate_profile.get("last_upload_file"),
+                },
+            }
+        )
+
+    return applications
+
+
 @router.get("/job/{job_id}")
 def get_applications_for_job(
     job_id: int,
@@ -231,6 +574,27 @@ def get_applications_for_job(
     - This endpoint is the main entry point for recruiter candidate review
     """
 
+    # ------------------------------------------------------------------
+    # 1. Verify recruiter owns the job
+    # ------------------------------------------------------------------
+    job_check = (
+        supabase.table("job_position")
+        .select("id")
+        .eq("id", job_id)
+        .eq("recruiter_profile_id", recruiter["id"])
+        .maybe_single()
+        .execute()
+    )
+
+    if not job_check.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found or not authorized",
+        )
+
+    # ------------------------------------------------------------------
+    # 2. Fetch applications with candidate profile data
+    # ------------------------------------------------------------------
     try:
         response = (
             supabase.table("applications")
@@ -243,6 +607,7 @@ def get_applications_for_job(
                 candidate_profiles (
                     profile_id,
                     location,
+                    last_upload_file,
                     profiles (
                         id,
                         full_name
@@ -266,16 +631,28 @@ def get_applications_for_job(
         candidate_profile = row.get("candidate_profiles") or {}
         profile = candidate_profile.get("profiles") or {}
 
+        # Map status for UI: "applied" -> "new", "reviewing" -> "reviewed", "hired" -> "accepted"
+        status = row["status"]
+        display_status = status
+        if status == "applied":
+            display_status = "new"
+        elif status == "reviewing":
+            display_status = "reviewed"
+        elif status == "hired":
+            display_status = "accepted"
+
         applications.append(
             {
                 "application_id": row["id"],
-                "status": row["status"],
+                "status": status,  # Keep original status for API operations
+                "display_status": display_status,  # UI-friendly status
                 "applied_at": row["applied_at"],
                 "cover_letter": row["cover_letter"],
                 "candidate": {
                     "id": profile.get("id"),
                     "full_name": profile.get("full_name"),
                     "location": candidate_profile.get("location"),
+                    "last_upload_file": candidate_profile.get("last_upload_file"),
                 },
             }
         )

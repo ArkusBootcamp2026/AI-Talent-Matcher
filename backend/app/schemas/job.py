@@ -10,6 +10,7 @@ class JobCreate(BaseModel):
     location: Optional[str] = None
     employment_type: Optional[str] = None
     optional_salary: Optional[int] = None
+    optional_salary_max: Optional[int] = None
     closing_date: Optional[date] = None
     sprint_duration: Optional[str] = None
     status: Optional[str] = "open"
@@ -32,7 +33,7 @@ class JobCreate(BaseModel):
             return None
         return v
 
-    @field_validator("optional_salary", mode="before")
+    @field_validator("optional_salary", "optional_salary_max", mode="before")
     @classmethod
     def parse_salary(cls, v):
         if v is None or v == "":
@@ -53,6 +54,7 @@ class JobUpdate(BaseModel):
     location: Optional[str] = None
     employment_type: Optional[str] = None
     optional_salary: Optional[int] = None
+    optional_salary_max: Optional[int] = None
     closing_date: Optional[date] = None
     sprint_duration: Optional[str] = None
     status: Optional[str] = None
@@ -75,7 +77,7 @@ class JobUpdate(BaseModel):
             return None
         return v
 
-    @field_validator("optional_salary", mode="before")
+    @field_validator("optional_salary", "optional_salary_max", mode="before")
     @classmethod
     def parse_salary(cls, v):
         if v is None or v == "":

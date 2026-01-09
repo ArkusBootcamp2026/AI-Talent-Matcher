@@ -240,19 +240,50 @@ def delete_job(
 @router.get("/")
 def list_open_jobs(supabase: Client = Depends(get_supabase)):
     """
-    Returns all open job positions.
+    Returns all open job positions with recruiter company information.
 
     Notes:
     ------
     - Accessible by candidates and unauthenticated users
     - RLS restricts visibility to jobs with status = 'open'
+    - Includes company name from recruiter_profiles via JOIN
     """
 
-    response = (
+    # First get all open jobs
+    jobs_response = (
         supabase.table("job_position")
-        .select("id, job_title, location, employment_type, status")
+        .select("id, job_title, job_description, job_requirements, job_skills, location, employment_type, optional_salary, optional_salary_max, closing_date, sprint_duration, status, created_at, recruiter_profile_id")
         .eq("status", "open")
         .execute()
     )
 
-    return response.data
+    if not jobs_response.data:
+        return []
+
+    # Get unique recruiter profile IDs
+    recruiter_ids = list(set([job["recruiter_profile_id"] for job in jobs_response.data if job.get("recruiter_profile_id")]))
+
+    # Fetch recruiter profiles
+    recruiters_map = {}
+    if recruiter_ids:
+        recruiters_response = (
+            supabase.table("recruiter_profiles")
+            .select("profile_id, company_name")
+            .in_("profile_id", recruiter_ids)
+            .execute()
+        )
+
+        if recruiters_response.data:
+            recruiters_map = {
+                recruiter["profile_id"]: recruiter.get("company_name")
+                for recruiter in recruiters_response.data
+            }
+
+    # Combine job data with company names
+    jobs = []
+    for job in jobs_response.data:
+        job_data = dict(job)
+        job_data["company_name"] = recruiters_map.get(job["recruiter_profile_id"])
+        jobs.append(job_data)
+
+    return jobs
