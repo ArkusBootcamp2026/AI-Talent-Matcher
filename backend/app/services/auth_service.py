@@ -20,10 +20,16 @@ from app.schemas.auth import (
     RecruiterSignupRequest,
 )
 
-# Service-role client (required for signup)
+# Service-role client (required for signup and admin operations)
 supabase_admin = create_client(
     settings.SUPABASE_URL,
     settings.SUPABASE_SERVICE_ROLE_KEY,
+)
+
+# Anon client (required for user login to generate RLS-compatible tokens)
+supabase_anon = create_client(
+    settings.SUPABASE_URL,
+    settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_ROLE_KEY,  # Fallback to service role if anon not set
 )
 
 
@@ -186,19 +192,23 @@ def login_user(payload):
     """
     Authenticates a user with email and password.
 
+    Uses the anon key client to generate tokens that work with RLS policies.
+    This ensures tokens are properly scoped for user-level operations.
+
     Raises:
     -------
     HTTP 401 if credentials are invalid.
     """
 
     try:
-        auth_response = supabase_admin.auth.sign_in_with_password(
+        # Use anon client for login to generate RLS-compatible tokens
+        auth_response = supabase_anon.auth.sign_in_with_password(
             {
                 "email": payload.email,
                 "password": payload.password,
             }
         )
-    except AuthApiError:
+    except AuthApiError as e:
         # Supabase explicitly rejected credentials
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

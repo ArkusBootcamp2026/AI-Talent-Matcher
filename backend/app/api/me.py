@@ -36,13 +36,30 @@ def get_me(
     # ------------------------------------------------------------------
     # Base profile (shared identity)
     # ------------------------------------------------------------------
-    profile_response = (
-        supabase.table("profiles")
-        .select("id, full_name, role, role_title, phone, avatar_url")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
+    # Try to select with optional columns first, fallback if they don't exist
+    try:
+        profile_response = (
+            supabase.table("profiles")
+            .select("id, full_name, role, role_title, phone, avatar_url")
+            .eq("id", user_id)
+            .single()
+            .execute()
+        )
+    except Exception as e:
+        # If role_title or avatar_url columns don't exist yet, select without them
+        error_msg = str(e).lower()
+        if "does not exist" in error_msg or "column" in error_msg:
+            # Fallback: select only columns that definitely exist
+            profile_response = (
+                supabase.table("profiles")
+                .select("id, full_name, role, phone")
+                .eq("id", user_id)
+                .single()
+                .execute()
+            )
+        else:
+            # Re-raise if it's a different error
+            raise
 
     if profile_response.data is None:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -54,7 +71,7 @@ def get_me(
         "full_name": profile["full_name"],
         "role": profile["role"],
         "role_title": profile.get("role_title"),
-        "phone": profile["phone"],
+        "phone": profile.get("phone"),
         "avatar_url": profile.get("avatar_url"),
     }
 
