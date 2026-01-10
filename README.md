@@ -28,14 +28,20 @@ The project includes setup scripts that automate the entire installation:
 **Windows (PowerShell):**
 ```powershell
 # Run setup script
-.\setup.ps1
+.\deps\windows\setup.ps1
+
+# Or with pyproject.toml alternative:
+.\deps\windows\setup.ps1 -UsePyProject
 ```
 
 **Linux/macOS (Bash):**
 ```bash
 # Grant execution permissions and run
-chmod +x setup.sh run-dev.sh
-./setup.sh
+chmod +x deps/macos-linux/setup.sh deps/macos-linux/run-dev.sh
+./deps/macos-linux/setup.sh
+
+# Or with pyproject.toml alternative:
+./deps/macos-linux/setup.sh --pyproject
 ```
 
 The setup scripts automatically perform:
@@ -70,7 +76,13 @@ uv venv
 source .venv/bin/activate
 
 # 4. Install backend dependencies
-uv pip install -r requirements.txt
+# Using requirements.txt (default):
+uv pip install -r deps/requirements.txt
+
+# Or using pyproject.toml (alternative):
+cd deps
+uv pip install -e .
+cd ..
 ```
 
 #### Frontend
@@ -88,13 +100,14 @@ npm install
 
 ### Environment Variables
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env` file in the `backend/` directory with the following variables:
 
 ```env
 # Supabase
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_JWT_SECRET=your_jwt_secret
 
 # OpenAI (for AI agents)
 OPENAI_API_KEY=your_openai_api_key
@@ -108,7 +121,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
 ENVIRONMENT=development
 ```
 
-> **Note**: Check `.env.example` if it exists, or create your own `.env` file based on the required variables.
+> **Note**: Copy `.env.example` from the project root to `backend/.env` and fill in your values. The backend loads environment variables from `backend/.env` when running.
 
 ## 🏃 Execution
 
@@ -116,12 +129,12 @@ ENVIRONMENT=development
 
 **Windows:**
 ```powershell
-.\run-dev.ps1
+.\deps\windows\run-dev.ps1
 ```
 
 **Linux/macOS:**
 ```bash
-./run-dev.sh
+./deps/macos-linux/run-dev.sh
 ```
 
 This command will start:
@@ -173,15 +186,21 @@ AI-Talent-Matcher/
 │       ├── pages/          # Application pages
 │       ├── services/       # API services
 │       ├── hooks/          # Custom hooks
+│       ├── lib/            # Utility libraries (api, auth, utils)
 │       └── types/          # TypeScript definitions
+├── deps/                   # Dependencies and setup scripts
+│   ├── requirements.txt    # Python dependencies (default)
+│   ├── pyproject.toml      # Python project configuration (alternative)
+│   ├── windows/            # Windows setup scripts
+│   │   ├── setup.ps1       # Setup script (Windows)
+│   │   └── run-dev.ps1     # Run both servers (Windows)
+│   └── macos-linux/        # macOS/Linux setup scripts
+│       ├── setup.sh         # Setup script (Unix/Linux/macOS)
+│       └── run-dev.sh       # Run both servers (Unix/Linux/macOS)
 ├── docs/                   # Documentation
 ├── .venv/                  # Python virtual environment (generated)
-├── requirements.txt        # Python dependencies
-├── pyproject.toml          # Python project configuration
-├── setup.sh                # Setup script (Unix/Linux/macOS)
-├── setup.ps1               # Setup script (Windows)
-├── run-dev.sh              # Script to run both servers (Unix/Linux/macOS)
-└── run-dev.ps1             # Script to run both servers (Windows)
+├── .env.example            # Environment variables template
+└── README.md               # This file
 ```
 
 ## 🌐 Access URLs
@@ -281,7 +300,8 @@ npm run build
 
 ### Error: "Module not found" (Backend)
 - Make sure the virtual environment is activated
-- Run: `uv pip install -r requirements.txt`
+- Run: `uv pip install -r deps/requirements.txt`
+- Or use pyproject.toml: `cd deps && uv pip install -e . && cd ..`
 
 ### Error: "Module not found" (Frontend)
 - Navigate to frontend directory: `cd frontend`
@@ -292,7 +312,6 @@ npm run build
 
 ## 📚 Additional Documentation
 
-- [SETUP_SUMMARY.md](./SETUP_SUMMARY.md) - Detailed setup process summary
 - [docs/UV_SETUP.md](./docs/UV_SETUP.md) - UV setup guide
 - [docs/prd.md](./docs/prd.md) - Product requirements document
 
