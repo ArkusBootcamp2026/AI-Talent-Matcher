@@ -18,9 +18,38 @@ Avatar.displayName = AvatarPrimitive.Root.displayName;
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image ref={ref} className={cn("aspect-square h-full w-full", className)} {...props} />
-));
+>(({ className, src, ...props }, ref) => {
+  // Only render if src is a valid non-empty string
+  if (!src || typeof src !== 'string' || src.trim() === "") {
+    return null;
+  }
+  
+  // Debug logging (only in development)
+  React.useEffect(() => {
+    if (src && process.env.NODE_ENV === 'development') {
+      console.log("AvatarImage rendering with src:", src);
+    }
+  }, [src]);
+  
+  return (
+    <AvatarPrimitive.Image 
+      ref={ref} 
+      className={cn("aspect-square h-full w-full object-cover", className)} 
+      src={src}
+      onError={(e) => {
+        if (process.env.NODE_ENV === 'development') {
+          console.error("AvatarImage onError - src:", src, "error:", e);
+        }
+      }}
+      onLoad={() => {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("AvatarImage onLoad - src:", src);
+        }
+      }}
+      {...props} 
+    />
+  );
+});
 AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
 const AvatarFallback = React.forwardRef<

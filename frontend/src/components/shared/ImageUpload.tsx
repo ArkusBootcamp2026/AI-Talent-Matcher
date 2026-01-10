@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
@@ -25,6 +25,23 @@ export function ImageUpload({
   const [preview, setPreview] = useState<string | null>(currentImageUrl || null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Update preview when currentImageUrl changes (after upload completes)
+  // Only update if we don't have a local file preview (data URL)
+  useEffect(() => {
+    if (currentImageUrl && typeof currentImageUrl === 'string' && currentImageUrl.trim() !== '') {
+      // If preview is a data URL (from file selection), keep it until upload completes
+      // Otherwise, use the currentImageUrl (from server)
+      if (!preview || !preview.startsWith('data:')) {
+        setPreview(currentImageUrl);
+      }
+    } else if (!currentImageUrl || currentImageUrl === '') {
+      // Clear preview only if no file is selected (no data URL preview)
+      if (!preview || !preview.startsWith('data:')) {
+        setPreview(null);
+      }
+    }
+  }, [currentImageUrl]);
 
   const validateFile = (file: File): boolean => {
     // Check file type
