@@ -1,8 +1,18 @@
 #!/bin/bash
 # Setup script for AI Talent Matcher using UV
 # This script sets up the project on a new machine
+#
+# Usage:
+#   ./setup.sh              # Uses requirements.txt (default)
+#   ./setup.sh --pyproject  # Uses pyproject.toml instead
 
 set -e  # Exit on error
+
+# Check for --pyproject flag
+USE_PYPROJECT=false
+if [[ "$1" == "--pyproject" ]]; then
+    USE_PYPROJECT=true
+fi
 
 echo "🚀 Setting up AI Talent Matcher project with UV..."
 
@@ -47,9 +57,28 @@ uv venv
 echo -e "${BLUE}🔌 Activating virtual environment...${NC}"
 source .venv/bin/activate
 
-# Step 5: Install dependencies from pyproject.toml
-echo -e "${BLUE}📥 Installing dependencies from pyproject.toml...${NC}"
-uv pip install -r requirements.txt
+# Step 5: Install dependencies
+# Get the project root (parent of deps folder)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+if [ "$USE_PYPROJECT" = true ]; then
+    echo -e "${BLUE}📥 Installing dependencies from pyproject.toml...${NC}"
+    echo -e "${BLUE}   (Alternative method - using pyproject.toml)${NC}"
+    # Install from pyproject.toml
+    # Note: pyproject.toml is in deps/ folder
+    # We need to change to deps directory
+    cd deps
+    uv pip install -e .
+    cd ..
+else
+    echo -e "${BLUE}📥 Installing dependencies from requirements.txt...${NC}"
+    echo -e "${BLUE}   (Default method - using requirements.txt)${NC}"
+    # Default: use requirements.txt for dependency installation
+    # Note: requirements.txt is in deps/ folder
+    uv pip install -r deps/requirements.txt
+fi
 
 # Step 6: Verify Python installation
 echo -e "${BLUE}✅ Verifying Python installation...${NC}"
@@ -98,7 +127,7 @@ echo -e "${GREEN}🎉 Setup complete!${NC}"
 echo -e "${BLUE}📝 Next steps:${NC}"
 echo -e ""
 echo -e "${BLUE}Backend:${NC}"
-echo -e "   1. Copy .env.example to .env and configure your environment variables"
+echo -e "   1. Copy .env.example to backend/.env and configure your environment variables"
 echo -e "   2. Activate the virtual environment: source .venv/bin/activate"
 echo -e "   3. Navigate to backend directory: cd backend"
 echo -e "   4. Run the backend: uvicorn app.main:app --reload"

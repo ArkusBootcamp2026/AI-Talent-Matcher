@@ -4,6 +4,11 @@
 
 set -e
 
+# Get the project root (parent of deps folder)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
+
 # Colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -14,13 +19,13 @@ echo -e "${BLUE}🚀 Starting AI Talent Matcher (Backend + Frontend)...${NC}"
 
 # Check if virtual environment exists
 if [ ! -d ".venv" ]; then
-    echo -e "${YELLOW}⚠️  Virtual environment not found. Run setup.sh first.${NC}"
+    echo -e "${YELLOW}⚠️  Virtual environment not found. Run deps/macos-linux/setup.sh first.${NC}"
     exit 1
 fi
 
 # Check if node_modules exists in frontend
 if [ ! -d "frontend/node_modules" ]; then
-    echo -e "${YELLOW}⚠️  Frontend dependencies not installed. Run setup.sh first.${NC}"
+    echo -e "${YELLOW}⚠️  Frontend dependencies not installed. Run deps/macos-linux/setup.sh first.${NC}"
     exit 1
 fi
 

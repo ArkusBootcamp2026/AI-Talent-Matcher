@@ -3,17 +3,21 @@
 
 $ErrorActionPreference = "Stop"
 
+# Get the project root (parent of deps folder)
+$projectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $projectRoot
+
 Write-Host "🚀 Starting AI Talent Matcher (Backend + Frontend)..." -ForegroundColor Blue
 
 # Check if virtual environment exists
 if (-not (Test-Path ".venv")) {
-    Write-Host "⚠️  Virtual environment not found. Run setup.ps1 first." -ForegroundColor Yellow
+    Write-Host "⚠️  Virtual environment not found. Run deps\windows\setup.ps1 first." -ForegroundColor Yellow
     exit 1
 }
 
 # Check if node_modules exists in frontend
 if (-not (Test-Path "frontend\node_modules")) {
-    Write-Host "⚠️  Frontend dependencies not installed. Run setup.ps1 first." -ForegroundColor Yellow
+    Write-Host "⚠️  Frontend dependencies not installed. Run deps\windows\setup.ps1 first." -ForegroundColor Yellow
     exit 1
 }
 

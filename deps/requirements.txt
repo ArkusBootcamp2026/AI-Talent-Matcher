@@ -17,6 +17,9 @@ pydantic-settings==2.12.0
 # Authentication
 python-jose==3.5.0
 
+# File Upload Support
+python-multipart==0.0.9
+
 # AI/LLM
 langchain-openai==1.1.7
 langchain-core==1.2.6

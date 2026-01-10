@@ -37,27 +37,31 @@ Este documento explica cómo configurar el proyecto AI Talent Matcher usando UV 
 ### 4. ✅ Scripts de Setup
 
 **Scripts generados:**
-- `setup.sh` - Para sistemas Unix/Linux/macOS
-- `setup.ps1` - Para Windows PowerShell
+- `deps/macos-linux/setup.sh` - Para sistemas Unix/Linux/macOS
+- `deps/windows/setup.ps1` - Para Windows PowerShell
 
 Ambos scripts:
 - Verifican Python
 - Instalan UV si no está presente
 - Crean entorno virtual con UV
-- Instalan dependencias desde `pyproject.toml`
+- Instalan dependencias desde `deps/requirements.txt` (default) o `deps/pyproject.toml` (alternative)
 - Verifican la instalación
 
 ## Uso Rápido
 
 ### En Windows (PowerShell):
 ```powershell
-.\setup.ps1
+.\deps\windows\setup.ps1
+# O con pyproject.toml:
+.\deps\windows\setup.ps1 -UsePyProject
 ```
 
 ### En Linux/macOS (Bash):
 ```bash
-chmod +x setup.sh
-./setup.sh
+chmod +x deps/macos-linux/setup.sh
+./deps/macos-linux/setup.sh
+# O con pyproject.toml:
+./deps/macos-linux/setup.sh --pyproject
 ```
 
 ### Manualmente con UV:
@@ -73,18 +77,28 @@ uv venv
 # Windows: .\.venv\Scripts\Activate.ps1
 # Unix:    source .venv/bin/activate
 
-# Instalar dependencias
+# Instalar dependencias (desde requirements.txt)
+uv pip install -r deps/requirements.txt
+
+# O desde pyproject.toml
+cd deps
 uv pip install -e .
+cd ..
 ```
 
 ## Estructura de Archivos Generados
 
 ```
 .
-├── requirements.txt          # Dependencias con versiones específicas
-├── pyproject.toml            # Configuración moderna PEP 621 + UV
-├── setup.sh                  # Script de setup para Unix/Linux/macOS
-└── setup.ps1                 # Script de setup para Windows
+├── deps/
+│   ├── requirements.txt      # Dependencias con versiones específicas (default)
+│   ├── pyproject.toml        # Configuración moderna PEP 621 + UV (alternative)
+│   ├── windows/
+│   │   ├── setup.ps1        # Script de setup para Windows
+│   │   └── run-dev.ps1      # Ejecutar ambos servidores (Windows)
+│   └── macos-linux/
+│       ├── setup.sh          # Script de setup para Unix/Linux/macOS
+│       └── run-dev.sh        # Ejecutar ambos servidores (Unix/Linux/macOS)
 ```
 
 ## Ventajas de UV

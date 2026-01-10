@@ -1,5 +1,13 @@
 # Setup script for AI Talent Matcher using UV (PowerShell)
 # This script sets up the project on a new machine
+#
+# Usage:
+#   .\setup.ps1              # Uses requirements.txt (default)
+#   .\setup.ps1 -UsePyProject # Uses pyproject.toml instead
+
+param(
+    [switch]$UsePyProject = $false
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -55,9 +63,27 @@ uv venv
 Write-Host "`n🔌 Activating virtual environment..." -ForegroundColor Blue
 & .\.venv\Scripts\Activate.ps1
 
-# Step 5: Install dependencies from pyproject.toml
-Write-Host "`n📥 Installing dependencies from pyproject.toml..." -ForegroundColor Blue
-uv pip install -r requirements.txt
+# Step 5: Install dependencies
+# Get the project root (parent of deps folder)
+$projectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $projectRoot
+
+if ($UsePyProject) {
+    Write-Host "`n📥 Installing dependencies from pyproject.toml..." -ForegroundColor Blue
+    Write-Host "   (Alternative method - using pyproject.toml)" -ForegroundColor Cyan
+    # Install from pyproject.toml
+    # Note: pyproject.toml is in deps/ folder
+    # We need to change to deps directory or specify the path
+    Set-Location deps
+    uv pip install -e .
+    Set-Location ..
+} else {
+    Write-Host "`n📥 Installing dependencies from requirements.txt..." -ForegroundColor Blue
+    Write-Host "   (Default method - using requirements.txt)" -ForegroundColor Cyan
+    # Default: use requirements.txt for dependency installation
+    # Note: requirements.txt is in deps/ folder
+    uv pip install -r deps/requirements.txt
+}
 
 # Step 6: Verify Python installation
 Write-Host "`n✅ Verifying Python installation..." -ForegroundColor Blue
@@ -115,7 +141,7 @@ Write-Host "`n🎉 Setup complete!" -ForegroundColor Green
 Write-Host "`n📝 Next steps:" -ForegroundColor Blue
 Write-Host ""
 Write-Host "Backend:" -ForegroundColor Blue
-Write-Host "   1. Copy .env.example to .env and configure your environment variables"
+Write-Host "   1. Copy .env.example to backend/.env and configure your environment variables"
 Write-Host "   2. Activate the virtual environment: .\.venv\Scripts\Activate.ps1"
 Write-Host "   3. Navigate to backend directory: cd backend"
 Write-Host "   4. Run the backend: uvicorn app.main:app --reload"
