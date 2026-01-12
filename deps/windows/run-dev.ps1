@@ -4,7 +4,8 @@
 $ErrorActionPreference = "Stop"
 
 # Get the project root (parent of deps folder)
-$projectRoot = Split-Path -Parent $PSScriptRoot
+# Script is in deps/windows/, so we need to go up 2 levels
+$projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $projectRoot
 
 Write-Host "🚀 Starting AI Talent Matcher (Backend + Frontend)..." -ForegroundColor Blue
@@ -35,8 +36,8 @@ $null = Register-EngineEvent PowerShell.Exiting -Action { Cleanup }
 
 # Start backend
 Write-Host "`n📡 Starting backend server..." -ForegroundColor Blue
-$backendPath = Join-Path $PSScriptRoot "backend"
-$venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
+$backendPath = Join-Path $projectRoot "backend"
+$venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
 $backendScript = {
     param($venvPython, $backendPath)
     Set-Location $backendPath
@@ -49,7 +50,7 @@ Start-Sleep -Seconds 2
 
 # Start frontend
 Write-Host "🎨 Starting frontend server..." -ForegroundColor Blue
-$frontendPath = Join-Path $PSScriptRoot "frontend"
+$frontendPath = Join-Path $projectRoot "frontend"
 $frontendScript = {
     param($frontendPath)
     Set-Location $frontendPath

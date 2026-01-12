@@ -65,7 +65,8 @@ Write-Host "`n🔌 Activating virtual environment..." -ForegroundColor Blue
 
 # Step 5: Install dependencies
 # Get the project root (parent of deps folder)
-$projectRoot = Split-Path -Parent $PSScriptRoot
+# Script is in deps/windows/, so we need to go up 2 levels
+$projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $projectRoot
 
 if ($UsePyProject) {

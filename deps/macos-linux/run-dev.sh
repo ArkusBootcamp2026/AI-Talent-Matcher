@@ -5,8 +5,9 @@
 set -e
 
 # Get the project root (parent of deps folder)
+# Script is in deps/macos-linux/, so we need to go up 2 levels
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # Colors
