@@ -28,6 +28,17 @@ export interface AuthResponse {
   token_type: string;
 }
 
+export interface PasswordResetRequest {
+  email: string;
+  new_password: string;
+  confirm_password: string;
+}
+
+export interface PasswordResetResponse {
+  status: string;
+  message: string;
+}
+
 // Profile Types
 export interface Profile {
   id: string;

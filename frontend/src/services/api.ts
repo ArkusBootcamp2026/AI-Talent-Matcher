@@ -6,6 +6,8 @@ import type {
   RecruiterSignupRequest,
   LoginRequest,
   AuthResponse,
+  PasswordResetRequest,
+  PasswordResetResponse,
   Profile,
   ProfileUpdate,
   CandidateProfileUpdate,
@@ -31,6 +33,11 @@ export const signupRecruiter = async (data: RecruiterSignupRequest): Promise<Aut
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
   const { data: response } = await apiClient.post<AuthResponse>('/auth/login', data);
+  return response;
+};
+
+export const resetPassword = async (data: PasswordResetRequest): Promise<PasswordResetResponse> => {
+  const { data: response } = await apiClient.post<PasswordResetResponse>('/auth/reset-password', data);
   return response;
 };
 
