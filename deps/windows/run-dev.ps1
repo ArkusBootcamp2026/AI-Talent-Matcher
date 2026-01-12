@@ -8,23 +8,23 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $projectRoot
 
-Write-Host "🚀 Starting AI Talent Matcher (Backend + Frontend)..." -ForegroundColor Blue
+Write-Host "[INFO] Starting AI Talent Matcher (Backend + Frontend)..." -ForegroundColor Blue
 
 # Check if virtual environment exists
 if (-not (Test-Path ".venv")) {
-    Write-Host "⚠️  Virtual environment not found. Run deps\windows\setup.ps1 first." -ForegroundColor Yellow
+    Write-Host "[WARNING] Virtual environment not found. Run deps\windows\setup.ps1 first." -ForegroundColor Yellow
     exit 1
 }
 
 # Check if node_modules exists in frontend
 if (-not (Test-Path "frontend\node_modules")) {
-    Write-Host "⚠️  Frontend dependencies not installed. Run deps\windows\setup.ps1 first." -ForegroundColor Yellow
+    Write-Host "[WARNING] Frontend dependencies not installed. Run deps\windows\setup.ps1 first." -ForegroundColor Yellow
     exit 1
 }
 
 # Function to cleanup on exit
 function Cleanup {
-    Write-Host "`n🛑 Stopping servers..." -ForegroundColor Yellow
+    Write-Host "`n[STOP] Stopping servers..." -ForegroundColor Yellow
     if ($backendJob) { Stop-Job $backendJob; Remove-Job $backendJob }
     if ($frontendJob) { Stop-Job $frontendJob; Remove-Job $frontendJob }
     exit
@@ -35,7 +35,7 @@ function Cleanup {
 $null = Register-EngineEvent PowerShell.Exiting -Action { Cleanup }
 
 # Start backend
-Write-Host "`n📡 Starting backend server..." -ForegroundColor Blue
+Write-Host "`n[INFO] Starting backend server..." -ForegroundColor Blue
 $backendPath = Join-Path $projectRoot "backend"
 $venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
 $backendScript = {
@@ -49,7 +49,7 @@ $backendJob = Start-Job -ScriptBlock $backendScript -ArgumentList $venvPython, $
 Start-Sleep -Seconds 2
 
 # Start frontend
-Write-Host "🎨 Starting frontend server..." -ForegroundColor Blue
+Write-Host "[INFO] Starting frontend server..." -ForegroundColor Blue
 $frontendPath = Join-Path $projectRoot "frontend"
 $frontendScript = {
     param($frontendPath)
@@ -58,8 +58,8 @@ $frontendScript = {
 }
 $frontendJob = Start-Job -ScriptBlock $frontendScript -ArgumentList $frontendPath
 
-Write-Host "`n✅ Both servers are running!" -ForegroundColor Green
-Write-Host "`n📝 Access points:" -ForegroundColor Blue
+Write-Host "`n[OK] Both servers are running!" -ForegroundColor Green
+Write-Host "`n[INFO] Access points:" -ForegroundColor Blue
 Write-Host "   Backend API: http://localhost:8000"
 Write-Host "   Frontend:    http://localhost:8080"
 Write-Host "   API Docs:    http://localhost:8000/docs"
@@ -72,7 +72,7 @@ try {
         Start-Sleep -Seconds 1
         # Check if jobs are still running
         if ($backendJob.State -eq "Failed" -or $frontendJob.State -eq "Failed") {
-            Write-Host "`n❌ One of the servers failed. Check job output:" -ForegroundColor Red
+            Write-Host "`n[ERROR] One of the servers failed. Check job output:" -ForegroundColor Red
             if ($backendJob.State -eq "Failed") {
                 Write-Host "Backend output:" -ForegroundColor Yellow
                 Receive-Job $backendJob
