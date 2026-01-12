@@ -106,7 +106,7 @@ try {
     $nodeMajor = [int]$versionParts[0]
     $nodeMinor = [int]$versionParts[1]
     
-    if ($nodeMajor -gt 22 -or ($nodeMajor -eq 22 -and $nodeMinor -ge 12)) {
+    if (($nodeMajor -gt 22) -or (($nodeMajor -eq 22) -and ($nodeMinor -ge 12))) {
         Write-Host "[OK] Node.js $nodeVersion detected" -ForegroundColor Green
         $frontendSetup = $true
     } else {
@@ -123,7 +123,7 @@ if ($frontendSetup) {
     Write-Host "`n[INFO] Setting up frontend dependencies..." -ForegroundColor Blue
     Push-Location frontend
     
-    if (Test-Path "package-lock.json" -or Test-Path "package.json") {
+    if ((Test-Path "package-lock.json") -or (Test-Path "package.json")) {
         Write-Host "   Installing dependencies with npm..." -ForegroundColor Blue
         npm install
         if ($LASTEXITCODE -eq 0) {
