@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useQueries, useQueryClient, useMutation } from "@tanstack/react-query";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,6 @@ import {
   Search,
   Filter,
   Eye,
-  Mail,
   MapPin,
   Briefcase,
   GraduationCap,
@@ -24,8 +23,8 @@ import {
   XCircle,
   FileText,
 } from "lucide-react";
-import { getAllRecruiterApplications, updateApplicationStatus } from "@/services/api";
-import type { JobApplication } from "@/types/api";
+import { getAllRecruiterApplications, updateApplicationStatus, getCandidateCV } from "@/services/api";
+import type { JobApplication, CVExtractionResponse } from "@/types/api";
 
 export default function CandidatePipeline() {
   const navigate = useNavigate();
@@ -73,7 +72,12 @@ export default function CandidatePipeline() {
   };
 
   const handleViewProfile = (application: JobApplication) => {
-    navigate(`/recruiter/candidates/${application.candidate.id}`);
+    // Navigate to candidate profile with applied_at timestamp to get CV version at application time
+    const params = new URLSearchParams();
+    if (application.applied_at) {
+      params.set('applied_at', application.applied_at);
+    }
+    navigate(`/recruiter/candidates/${application.candidate.id}?${params.toString()}`);
   };
 
   const handleReject = (applicationId: number) => {
@@ -86,9 +90,10 @@ export default function CandidatePipeline() {
   const handleAccept = (applicationId: number) => {
     updateStatusMutation.mutate({
       applicationId,
-      status: "hired",
+      status: "hired", // Backend uses "hired" but displays as "accepted"
     });
-    navigate("/recruiter/accepted");
+    // Navigate to ManageApplications page to show the accepted candidate
+    navigate("/recruiter/applications");
   };
 
   const formatAppliedDate = (dateString: string): string => {
@@ -105,20 +110,166 @@ export default function CandidatePipeline() {
     return skillsString.split(",").map((s) => s.trim()).filter(Boolean);
   };
 
+  // Truncate text at word boundaries to prevent UI overflow
+  const truncateAtWordBoundary = (text: string, maxLength: number): string => {
+    if (!text || text.length <= maxLength) return text;
+    
+    // Find the last space before maxLength
+    const truncated = text.substring(0, maxLength);
+    const lastSpace = truncated.lastIndexOf(' ');
+    
+    // If we found a space, truncate there; otherwise truncate at maxLength
+    if (lastSpace > 0) {
+      return truncated.substring(0, lastSpace);
+    }
+    return truncated;
+  };
+
+  // Clean text by removing trailing punctuation (commas, periods, etc.)
+  const cleanText = (text: string): string => {
+    if (!text) return text;
+    // Remove trailing commas, periods, and other punctuation
+    return text.replace(/[,.\s]+$/, '').trim();
+  };
+
+  // Extract text before the first comma (for education - show only degree, omit institution)
+  const extractBeforeComma = (text: string): string => {
+    if (!text) return text;
+    const commaIndex = text.indexOf(',');
+    if (commaIndex > 0) {
+      return cleanText(text.substring(0, commaIndex));
+    }
+    return cleanText(text);
+  };
+
+  // Fetch CV data for all candidates
+  const candidateIds = useMemo(() => {
+    return applications.map((app) => app.candidate.id).filter(Boolean);
+  }, [applications]);
+
+  // Use useQueries to fetch CV data for all candidates
+  const cvQueries = useQueries({
+    queries: candidateIds.map((candidateId) => ({
+      queryKey: ["candidateCV", candidateId],
+      queryFn: () => getCandidateCV(candidateId),
+      enabled: !!candidateId,
+      retry: false,
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+      // Don't throw on 404 - candidate might not have uploaded CV yet
+      throwOnError: false,
+    })),
+  });
+
+  // Create a map of candidate ID to CV data
+  const cvDataMap = useMemo(() => {
+    const map = new Map<string, CVExtractionResponse>();
+    candidateIds.forEach((candidateId, index) => {
+      const query = cvQueries[index];
+      if (query.data) {
+        map.set(candidateId, query.data);
+      }
+    });
+    return map;
+  }, [candidateIds, cvQueries]);
+
+  // Calculate years of experience from experience entries
+  const calculateYearsOfExperience = (experiences: Array<{ start_date?: string; end_date?: string }>): string => {
+    if (!experiences || experiences.length === 0) return "N/A";
+    
+    try {
+      const now = new Date();
+      let totalMonths = 0;
+      
+      for (const exp of experiences) {
+        if (!exp.start_date) continue;
+        
+        const startDate = parseISO(exp.start_date);
+        const endDate = exp.end_date ? parseISO(exp.end_date) : now;
+        
+        if (startDate && endDate) {
+          const months = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                        (endDate.getMonth() - startDate.getMonth());
+          totalMonths += Math.max(0, months);
+        }
+      }
+      
+      if (totalMonths === 0) return "N/A";
+      
+      const years = Math.floor(totalMonths / 12);
+      if (years === 0) {
+        return `${totalMonths} month${totalMonths !== 1 ? 's' : ''}`;
+      }
+      return `${years} year${years !== 1 ? 's' : ''}`;
+    } catch {
+      return "N/A";
+    }
+  };
+
   // Transform applications to candidate-like structure for display
   const candidates = useMemo(() => {
     return applications.map((app) => {
-      // Parse skills if available (this would come from parsed CV data later)
-      // For now, we'll use empty array - skills will be added when CV parsing is implemented
-      const skills: string[] = []; // Placeholder - will be populated from parsed CV data
+      const cvData = cvDataMap.get(app.candidate.id);
+      
+      // Extract name from CV (priority) or application
+      const name = cvData?.cv_data?.identity?.full_name || app.candidate.full_name || "Unknown";
+      
+      // Extract career/current role - from headline or latest experience role
+      let career = "";
+      if (cvData?.cv_data?.identity?.headline) {
+        career = cvData.cv_data.identity.headline;
+      } else if (cvData?.cv_data?.experience && Array.isArray(cvData.cv_data.experience) && cvData.cv_data.experience.length > 0) {
+        const latestExp = cvData.cv_data.experience[0];
+        career = latestExp.role || "";
+      }
+      
+      // Extract latest work experience role for briefcase display
+      let currentRole = "N/A";
+      if (cvData?.cv_data?.experience && Array.isArray(cvData.cv_data.experience) && cvData.cv_data.experience.length > 0) {
+        const latestExp = cvData.cv_data.experience[0];
+        if (latestExp.role) {
+          currentRole = latestExp.role;
+        }
+      }
+      
+      // Extract skills from CV data
+      let skills: string[] = [];
+      if (cvData?.cv_data?.skills_analysis) {
+        const explicitSkills = cvData.cv_data.skills_analysis.explicit_skills || [];
+        const jobRelatedSkills = cvData.cv_data.skills_analysis.job_related_skills || [];
+        const allSkillsSet = new Set([...explicitSkills, ...jobRelatedSkills]);
+        skills = Array.from(allSkillsSet);
+      }
+
+      // Calculate years of experience
+      const experienceYears = cvData?.cv_data?.experience 
+        ? calculateYearsOfExperience(cvData.cv_data.experience)
+        : "N/A";
+
+      // Extract education summary
+      let education = "N/A";
+      if (cvData?.cv_data?.education && Array.isArray(cvData.cv_data.education) && cvData.cv_data.education.length > 0) {
+        const latestEdu = cvData.cv_data.education[0];
+        if (latestEdu.degree && latestEdu.institution) {
+          education = `${latestEdu.degree}, ${latestEdu.institution}`;
+        } else if (latestEdu.degree) {
+          education = latestEdu.degree;
+        } else if (latestEdu.institution) {
+          education = latestEdu.institution;
+        }
+      }
+
+      // Extract location from CV (priority) or application
+      const location = cvData?.cv_data?.identity?.location || app.candidate.location || "Not specified";
 
       return {
         id: app.application_id,
         applicationId: app.application_id,
-        name: app.candidate.full_name || "Unknown",
-        location: app.candidate.location || "Not specified",
-        experience: "N/A", // Placeholder - will be populated from parsed CV data
-        education: "N/A", // Placeholder - will be populated from parsed CV data
+        name,
+        career,
+        currentRole,
+        location,
+        experienceYears,
+        education,
         score: 0, // Placeholder - match score will be calculated later
         skills,
         appliedFor: app.job_title || "Unknown Position",
@@ -128,9 +279,10 @@ export default function CandidatePipeline() {
         originalStatus: app.status,
         lastUploadFile: app.candidate.last_upload_file,
         candidateId: app.candidate.id,
+        hasCV: !!cvData,
       };
     });
-  }, [applications]);
+  }, [applications, cvDataMap]);
 
   const filteredCandidates = useMemo(() => {
     return candidates
@@ -215,22 +367,23 @@ export default function CandidatePipeline() {
       </p>
 
       {/* Candidates List */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {filteredCandidates.map((candidate, index) => (
           <Card
             key={candidate.id}
             className="hover-lift animate-fade-in"
             style={{ animationDelay: `${index * 0.05}s` }}
           >
-            <CardContent className="p-6">
-              <div className="flex flex-col lg:flex-row gap-6">
-                {/* Match Score */}
-                <div className="flex lg:flex-col items-center lg:items-center gap-4 lg:gap-2">
-                  <MatchScore score={candidate.score} size="md" />
+            <CardContent className="p-4">
+              <div className="flex flex-col lg:flex-row gap-4">
+                {/* Match Score - Left Section */}
+                <div className="flex lg:flex-col items-center justify-center">
+                  <MatchScore score={candidate.score} size="md" showLabel={true} />
                 </div>
 
-                {/* Candidate Info */}
-                <div className="flex-1 space-y-3">
+                {/* Candidate Info - Center Section */}
+                <div className="flex-1 space-y-2">
+                  {/* Row 1: Name, Status, Applied Date */}
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <Avatar className="w-12 h-12">
@@ -246,52 +399,57 @@ export default function CandidatePipeline() {
                             {candidate.status}
                           </Badge>
                         </div>
-                        {candidate.lastUploadFile && (
-                          <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                            <FileText className="w-3 h-3" />
-                            <span>CV uploaded</span>
-                          </div>
+                        {/* Row 2: Career/Headline */}
+                        {candidate.career && (
+                          <p className="text-sm text-foreground mt-0.5" title={candidate.career}>
+                            {cleanText(truncateAtWordBoundary(candidate.career, 60))}
+                          </p>
                         )}
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground whitespace-nowrap">
                       Applied: {candidate.appliedDate}
                     </p>
                   </div>
 
-                  {/* Details */}
+                  {/* Row 3: Details with Icons */}
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {candidate.location}
+                    <span className="flex items-center gap-1.5" title={candidate.location}>
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{cleanText(truncateAtWordBoundary(candidate.location, 35))}</span>
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Briefcase className="w-3.5 h-3.5" />
-                      {candidate.experience}
+                    <span className="flex items-center gap-1.5" title={candidate.currentRole}>
+                      <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{cleanText(truncateAtWordBoundary(candidate.currentRole, 40))}</span>
                     </span>
-                    <span className="flex items-center gap-1">
-                      <GraduationCap className="w-3.5 h-3.5" />
-                      {candidate.education}
+                    <span className="flex items-center gap-1.5" title={candidate.education}>
+                      <GraduationCap className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{extractBeforeComma(truncateAtWordBoundary(candidate.education, 50))}</span>
                     </span>
                   </div>
 
-                  {/* Skills */}
+                  {/* Row 4: Skills */}
                   {candidate.skills.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {candidate.skills.map((skill) => (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {candidate.skills.slice(0, 4).map((skill) => (
                         <SkillTag key={skill} skill={skill} className="text-xs" />
                       ))}
+                      {candidate.skills.length > 4 && (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          +{candidate.skills.length - 4} more
+                        </Badge>
+                      )}
                     </div>
                   )}
 
-                  {/* Applied For */}
+                  {/* Row 5: Applied For */}
                   <p className="text-xs text-muted-foreground">
                     Applied for: <span className="text-foreground font-medium">{candidate.appliedFor}</span>
                   </p>
                 </div>
 
-                {/* Actions */}
-                <div className="flex lg:flex-col gap-2 lg:justify-center">
+                {/* Actions - Right Section */}
+                <div className="flex lg:flex-col gap-2 lg:justify-center lg:min-w-[140px]">
                   <Button
                     variant="outline"
                     size="sm"
@@ -301,42 +459,23 @@ export default function CandidatePipeline() {
                     <Eye className="w-4 h-4" />
                     View Profile
                   </Button>
-                  <Button variant="outline" size="sm" className="w-full gap-2">
-                    <Mail className="w-4 h-4" />
-                    Contact
+                  <Button
+                    size="sm"
+                    className="w-full gap-2 bg-success hover:bg-success/90"
+                    onClick={() => handleAccept(candidate.applicationId)}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    Accept
                   </Button>
-                  {candidate.status !== "accepted" && candidate.status !== "rejected" ? (
-                    <>
-                      <Button
-                        size="sm"
-                        className="w-full gap-2 bg-success hover:bg-success/90"
-                        onClick={() => handleAccept(candidate.applicationId)}
-                      >
-                        <UserCheck className="w-4 h-4" />
-                        Accept
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
-                        onClick={() => handleReject(candidate.applicationId)}
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Reject
-                      </Button>
-                    </>
-                  ) : candidate.status === "accepted" ? (
-                    <Link to="/recruiter/accepted" className="w-full">
-                      <Button variant="outline" size="sm" className="w-full gap-2 text-success border-success/30">
-                        <UserCheck className="w-4 h-4" />
-                        View Accepted
-                      </Button>
-                    </Link>
-                  ) : (
-                    <Badge variant="outline" className="justify-center py-2 text-destructive border-destructive/30">
-                      Rejected
-                    </Badge>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={() => handleReject(candidate.applicationId)}
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Reject
+                  </Button>
                 </div>
               </div>
             </CardContent>

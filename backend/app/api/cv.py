@@ -1,11 +1,12 @@
 """CV extraction API endpoints"""
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from supabase import Client
 from pathlib import Path
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_recruiter
 from app.db.supabase import get_supabase
 from app.services.cv.extraction_service import extract_cv_from_pdf
 from app.services.cv.storage_service import (
@@ -14,6 +15,7 @@ from app.services.cv.storage_service import (
     generate_timestamp,
     update_parsed_cv,
     get_parsed_cv,
+    get_parsed_cv_at_datetime,
 )
 from app.schemas.cv.extraction import CVExtractionResponse
 from app.schemas.cv.update import CVUpdateRequest, CVUpdateResponse
@@ -314,6 +316,133 @@ async def get_latest_cv(
     except Exception as e:
         error_message = str(e)
         logger.error(f"CV retrieval error for user {user_id}: {error_message}", exc_info=True)
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve CV: {error_message}",
+        )
+
+
+@router.get("/candidate/{candidate_id}", response_model=CVExtractionResponse)
+async def get_candidate_cv(
+    candidate_id: str,
+    applied_at: Optional[str] = Query(None, description="ISO datetime to get CV version at application time"),
+    recruiter=Depends(require_recruiter),
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Get parsed CV data for a specific candidate.
+    
+    If applied_at is provided, returns the CV version that existed at that datetime.
+    Otherwise, returns the latest CV version.
+    
+    This endpoint is for recruiters to view candidate CVs.
+    Only accessible by authenticated recruiters.
+    
+    Args:
+        candidate_id: Candidate user ID
+        applied_at: Optional ISO datetime string (e.g., "2024-01-15T10:30:00")
+                    to get CV version at time of application
+    """
+    logger.info(f"Getting CV for candidate {candidate_id} (requested by recruiter {recruiter['id']})")
+    
+    try:
+        # First check if files exist before calling get_parsed_cv
+        try:
+            files = supabase.storage.from_(settings.SUPABASE_CV_BUCKET).list(
+                f"{candidate_id}/parsed"
+            )
+            logger.info(f"Storage list returned {len(files) if files else 0} files for candidate {candidate_id}")
+        except Exception as list_error:
+            logger.error(f"Error listing files for candidate {candidate_id}: {str(list_error)}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"Error accessing candidate CV storage: {str(list_error)}",
+            )
+        
+        if not files or len(files) == 0:
+            logger.warning(f"No parsed CV files found for candidate {candidate_id} in path {candidate_id}/parsed")
+            raise HTTPException(
+                status_code=404,
+                detail="No parsed CV found for candidate",
+            )
+        
+        # Get CV data - use datetime if provided, otherwise get latest
+        try:
+            if applied_at:
+                cv_data = get_parsed_cv_at_datetime(supabase, candidate_id, applied_at)
+            else:
+                cv_data = get_parsed_cv(supabase, candidate_id, timestamp=None)
+        except ValueError as ve:
+            logger.error(f"get_parsed_cv raised ValueError for candidate {candidate_id}: {str(ve)}")
+            raise HTTPException(
+                status_code=404,
+                detail=str(ve),
+            )
+        
+        # Sort by timestamp extracted from filename for more reliable sorting
+        def extract_timestamp(filename: str) -> str:
+            """Extract timestamp from filename (format: YYYYMMDD_HHMMSS_filename.json)"""
+            try:
+                parts = filename.split('_', 2)
+                if len(parts) >= 2:
+                    return f"{parts[0]}_{parts[1]}"
+            except:
+                pass
+            return filename
+        
+        # Sort by updated_at if available, otherwise by timestamp
+        files_with_metadata = []
+        for file_info in files:
+            updated_at = file_info.get("updated_at") or file_info.get("created_at")
+            files_with_metadata.append((file_info, updated_at if updated_at and updated_at.strip() else ""))
+        
+        files_with_metadata.sort(
+            key=lambda x: x[1] if x[1] and x[1].strip() else extract_timestamp(x[0].get("name", "")),
+            reverse=True
+        )
+        
+        parsed_path = f"{candidate_id}/parsed/{files_with_metadata[0][0]['name']}"
+        
+        # Try to get raw PDF path
+        raw_files = supabase.storage.from_(settings.SUPABASE_CV_BUCKET).list(
+            f"{candidate_id}/raw"
+        )
+        raw_path = None
+        if raw_files:
+            raw_files_with_metadata = []
+            for file_info in raw_files:
+                updated_at = file_info.get("updated_at") or file_info.get("created_at")
+                raw_files_with_metadata.append((file_info, updated_at if updated_at and updated_at.strip() else ""))
+            
+            raw_files_with_metadata.sort(
+                key=lambda x: x[1] if x[1] and x[1].strip() else extract_timestamp(x[0].get("name", "")),
+                reverse=True
+            )
+            raw_path = f"{candidate_id}/raw/{raw_files_with_metadata[0][0]['name']}"
+        
+        logger.info(f"Successfully retrieved CV for candidate {candidate_id}")
+        return CVExtractionResponse(
+            status="success",
+            cv_data=cv_data,
+            metadata=cv_data.get("metadata", {}),
+            storage_paths={
+                "raw": raw_path or "",
+                "parsed": parsed_path,
+            },
+        )
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.error(f"CV retrieval error (ValueError): {str(e)}")
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        )
+    except Exception as e:
+        error_message = str(e)
+        logger.error(f"CV retrieval error for candidate {candidate_id}: {error_message}", exc_info=True)
         
         raise HTTPException(
             status_code=500,

@@ -97,6 +97,76 @@ def store_parsed_cv(
     return storage_path
 
 
+def get_parsed_cv_at_datetime(
+    supabase: Client,
+    user_id: str,
+    target_datetime: str
+) -> dict:
+    """
+    Retrieve the parsed CV that was the latest at a specific datetime.
+    
+    This is useful for getting the CV version that existed when a candidate
+    applied to a job position.
+    
+    Args:
+        supabase: Supabase client
+        user_id: User ID
+        target_datetime: ISO format datetime string (e.g., "2024-01-15T10:30:00")
+        
+    Returns:
+        Parsed CV data as dictionary (the latest CV that existed at target_datetime)
+    """
+    from datetime import datetime
+    
+    try:
+        target_dt = datetime.fromisoformat(target_datetime.replace('Z', '+00:00'))
+    except:
+        # Fallback to latest if datetime parsing fails
+        return get_parsed_cv(supabase, user_id, timestamp=None)
+    
+    files = supabase.storage.from_(settings.SUPABASE_CV_BUCKET).list(
+        f"{user_id}/parsed"
+    )
+    
+    if not files:
+        raise ValueError(f"No parsed CVs found for user {user_id}")
+    
+    # Filter files that were created before or at target_datetime
+    valid_files = []
+    for file_info in files:
+        file_created_at = file_info.get("created_at") or file_info.get("updated_at")
+        if file_created_at:
+            try:
+                file_dt = datetime.fromisoformat(file_created_at.replace('Z', '+00:00'))
+                if file_dt <= target_dt:
+                    valid_files.append((file_info, file_dt))
+            except:
+                # If we can't parse the date, try to extract from filename
+                filename = file_info.get("name", "")
+                try:
+                    # Filename format: YYYYMMDD_HHMMSS_filename.json
+                    parts = filename.split('_', 2)
+                    if len(parts) >= 2:
+                        date_str = parts[0]  # YYYYMMDD
+                        time_str = parts[1]  # HHMMSS
+                        file_dt = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+                        if file_dt <= target_dt:
+                            valid_files.append((file_info, file_dt))
+                except:
+                    pass
+    
+    if not valid_files:
+        raise ValueError(f"No CV found for user {user_id} at datetime {target_datetime}")
+    
+    # Get the latest file from valid files
+    valid_files.sort(key=lambda x: x[1], reverse=True)
+    latest_file = valid_files[0][0]
+    file_path = f"{user_id}/parsed/{latest_file['name']}"
+    
+    file_content = supabase.storage.from_(settings.SUPABASE_CV_BUCKET).download(file_path)
+    return json.loads(file_content.decode('utf-8'))
+
+
 def get_parsed_cv(
     supabase: Client,
     user_id: str,

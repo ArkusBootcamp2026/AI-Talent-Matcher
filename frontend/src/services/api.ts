@@ -197,3 +197,9 @@ export const getLatestCV = async (): Promise<CVExtractionResponse> => {
   const { data } = await apiClient.get<CVExtractionResponse>('/cv/latest');
   return data;
 };
+
+export const getCandidateCV = async (candidateId: string, appliedAt?: string): Promise<CVExtractionResponse> => {
+  const params = appliedAt ? `?applied_at=${encodeURIComponent(appliedAt)}` : '';
+  const { data } = await apiClient.get<CVExtractionResponse>(`/cv/candidate/${candidateId}${params}`);
+  return data;
+};
