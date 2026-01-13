@@ -18,6 +18,9 @@ import type {
   ApplicationCreate,
   Application,
   JobApplication,
+  CVExtractionResponse,
+  CVUpdateRequest,
+  CVUpdateResponse,
 } from '@/types/api';
 
 // Authentication Services
@@ -166,5 +169,31 @@ export const generateSkills = async (payload: {
   requirements: string;
 }): Promise<{ skills: string[] }> => {
   const { data } = await apiClient.post<{ skills: string[] }>('/llm/skills', payload);
+  return data;
+};
+
+// CV Services
+export const uploadCV = async (file: File): Promise<CVExtractionResponse> => {
+  console.log('uploadCV called with file:', file.name, file.size, file.type);
+  const formData = new FormData();
+  formData.append('file', file);
+  console.log('FormData created, posting to /cv/extract');
+  try {
+    const { data } = await apiClient.post<CVExtractionResponse>('/cv/extract', formData);
+    console.log('CV upload response received:', data);
+    return data;
+  } catch (error) {
+    console.error('Error in uploadCV:', error);
+    throw error;
+  }
+};
+
+export const updateCV = async (updates: CVUpdateRequest): Promise<CVUpdateResponse> => {
+  const { data } = await apiClient.patch<CVUpdateResponse>('/cv/update', updates);
+  return data;
+};
+
+export const getLatestCV = async (): Promise<CVExtractionResponse> => {
+  const { data } = await apiClient.get<CVExtractionResponse>('/cv/latest');
   return data;
 };

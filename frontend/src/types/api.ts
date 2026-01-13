@@ -153,3 +153,71 @@ export interface JobApplication {
   };
 }
 
+// CV Extraction Types
+export interface CVExtractionResponse {
+  status: string;
+  cv_data: {
+    metadata: {
+      extraction_date: string;
+      extraction_time: string;
+      extraction_datetime: string;
+    };
+    identity: {
+      full_name?: string;
+      headline?: string;
+      introduction?: string;
+      email?: string;
+      phone?: string;
+      location?: string;
+    };
+    experience: Array<{
+      company?: string;
+      role?: string;
+      responsibilities: string[];
+      start_date?: string;
+      end_date?: string;
+    }>;
+    education: Array<{
+      institution?: string;
+      degree?: string;
+      start_date?: string;
+      end_date?: string;
+      certifications: string[];
+      academic_projects: string[];
+    }>;
+    projects: string[];
+    certifications: string[];
+    skills_analysis: {
+      explicit_skills: string[];
+      related_roles: string[];
+      job_related_skills: string[];
+    };
+  };
+  metadata: {
+    extraction_date: string;
+    extraction_time: string;
+    extraction_datetime: string;
+  };
+  storage_paths: {
+    raw: string;
+    parsed: string;
+  };
+}
+
+// CV Update Types
+export interface CVUpdateRequest {
+  full_name?: string;
+  headline?: string;
+  introduction?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  selected_skills?: string[];
+}
+
+export interface CVUpdateResponse {
+  status: string;
+  message: string;
+  storage_path: string;
+}
+

@@ -21,6 +21,15 @@ python-jose==3.5.0
 python-multipart==0.0.9
 
 # AI/LLM
+langchain>=0.3.0
 langchain-openai==1.1.7
 langchain-core==1.2.6
 openai==2.14.0
+
+# PDF Processing
+pypdf>=3.0.0
+pymupdf>=1.23.0  # PyMuPDF - fallback for malformed PDFs with bbox errors
+
+# NLP & Data Processing
+spacy>=3.7.0
+pandas>=2.0.0

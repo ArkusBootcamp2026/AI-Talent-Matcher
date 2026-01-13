@@ -4,13 +4,17 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, me, jobs, applications, candidate_profiles, recruiter_profiles, llm, profiles
+from app.api import auth, me, jobs, applications, candidate_profiles, recruiter_profiles, llm, profiles, cv
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Reduce verbosity of HTTP client libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 app = FastAPI(title="AI Talent Matcher API")
 
@@ -41,3 +45,4 @@ app.include_router(candidate_profiles.router)
 app.include_router(recruiter_profiles.router)
 app.include_router(profiles.router)
 app.include_router(llm.router)
+app.include_router(cv.router)

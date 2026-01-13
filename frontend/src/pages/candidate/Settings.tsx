@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +8,14 @@ import { ImageUpload } from "@/components/shared/ImageUpload";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { updateProfile, uploadAvatar, updateCandidateProfile } from "@/services/api";
+import { updateProfile, uploadAvatar, updateCandidateProfile, uploadCV } from "@/services/api";
 import {
   User,
   Save,
   MapPin,
+  FileText,
+  Upload,
+  Loader2,
 } from "lucide-react";
 
 export default function Settings() {
@@ -21,7 +24,10 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingCandidate, setIsSavingCandidate] = useState(false);
+  const [isUploadingCV, setIsUploadingCV] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [selectedCV, setSelectedCV] = useState<File | null>(null);
+  const cvInputRef = useRef<HTMLInputElement>(null);
 
   const [profileData, setProfileData] = useState({
     full_name: "",
@@ -48,6 +54,20 @@ export default function Settings() {
       }
     }
   }, [user]);
+
+  // Debug: Log selectedCV changes
+  useEffect(() => {
+    console.log("selectedCV state changed:", selectedCV);
+    if (selectedCV) {
+      console.log("File is ready to upload:", {
+        name: selectedCV.name,
+        size: selectedCV.size,
+        type: selectedCV.type,
+      });
+    } else {
+      console.log("No file selected");
+    }
+  }, [selectedCV]);
 
   const handleSaveProfile = async () => {
     setIsSavingProfile(true);
@@ -144,6 +164,135 @@ export default function Settings() {
   const handleImageRemove = () => {
     setSelectedImage(null);
     setProfileData((prev) => ({ ...prev, avatar_url: "" }));
+  };
+
+  const handleCVSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log("=== FILE INPUT CHANGED ===");
+    console.log("Event:", event);
+    console.log("Files:", event.target.files);
+    console.log("Files length:", event.target.files?.length);
+    
+    const file = event.target.files?.[0];
+    if (!file) {
+      console.warn("No file selected in handleCVSelect");
+      setSelectedCV(null);
+      return;
+    }
+
+    console.log("File selected:", {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified,
+    });
+
+    // Validate file type
+    const allowedTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    const allowedExtensions = [".pdf", ".doc", ".docx"];
+    const fileExt = "." + file.name.split(".").pop()?.toLowerCase();
+
+    console.log("File validation:", {
+      fileType: file.type,
+      fileExt,
+      allowedTypes,
+      allowedExtensions,
+      typeMatch: allowedTypes.includes(file.type),
+      extMatch: allowedExtensions.includes(fileExt),
+    });
+
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExt)) {
+      console.error("File type validation failed");
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload a PDF, DOC, or DOCX file.",
+        variant: "destructive",
+      });
+      setSelectedCV(null);
+      return;
+    }
+
+    // Validate file size (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      console.error("File size validation failed:", file.size, ">", maxSize);
+      toast({
+        title: "File Too Large",
+        description: "File size must be less than 10MB.",
+        variant: "destructive",
+      });
+      setSelectedCV(null);
+      return;
+    }
+
+    console.log("File validation passed, setting selectedCV");
+    setSelectedCV(file);
+    console.log("selectedCV state updated, file should now be:", file.name);
+  };
+
+  const handleCVUpload = async () => {
+    console.log("handleCVUpload called", { selectedCV, isUploadingCV });
+    
+    if (!selectedCV) {
+      console.warn("No CV file selected - button should be disabled");
+      toast({
+        title: "No File Selected",
+        description: "Please select a CV file first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log("Starting CV upload:", {
+      filename: selectedCV.name,
+      size: selectedCV.size,
+      type: selectedCV.type,
+    });
+
+    setIsUploadingCV(true);
+    console.log("isUploadingCV set to true");
+    
+    try {
+      console.log("Calling uploadCV function...");
+      const result = await uploadCV(selectedCV);
+      console.log("CV upload successful:", result);
+      
+      toast({
+        title: "CV Uploaded Successfully",
+        description: "Your CV has been processed and stored.",
+      });
+
+      setSelectedCV(null);
+      if (cvInputRef.current) {
+        cvInputRef.current.value = "";
+      }
+
+      // Invalidate queries to refresh user data
+      await queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+    } catch (error: any) {
+      console.error("CV upload error:", error);
+      console.error("Error details:", {
+        message: error?.message,
+        response: error?.response?.data,
+        status: error?.response?.status,
+        stack: error?.stack,
+      });
+      
+      toast({
+        title: "Upload Failed",
+        description: error?.response?.data?.detail || error?.message || "Failed to upload CV. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      console.log("Setting isUploadingCV to false");
+      setIsUploadingCV(false);
+    }
+  };
+
+  const handleCVRemove = () => {
+    setSelectedCV(null);
+    if (cvInputRef.current) {
+      cvInputRef.current.value = "";
+    }
   };
 
   return (
@@ -254,6 +403,105 @@ export default function Settings() {
             >
               <Save className="w-4 h-4" />
               {isSavingCandidate ? "Saving..." : "Save Candidate Info"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* CV Upload */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileText className="w-5 h-5 text-primary" />
+            CV Upload
+          </CardTitle>
+          <CardDescription>
+            Upload your CV (PDF, DOC, or DOCX) to extract and store your professional information
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="cv_upload">CV File</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                id="cv_upload"
+                ref={cvInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleCVSelect}
+                className="flex-1"
+              />
+            </div>
+            {selectedCV ? (
+              <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">{selectedCV.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({(selectedCV.size / 1024 / 1024).toFixed(2)} MB)
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    console.log("Remove CV button clicked");
+                    e.preventDefault();
+                    handleCVRemove();
+                  }}
+                  disabled={isUploadingCV}
+                  type="button"
+                >
+                  Remove
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                No file selected. Please choose a PDF, DOC, or DOCX file.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Supported formats: PDF, DOC, DOCX. Maximum file size: 10MB.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-4 gap-2 items-center">
+            {selectedCV && (
+              <span className="text-xs text-muted-foreground">
+                Ready to upload: {selectedCV.name}
+              </span>
+            )}
+            <Button
+              onClick={(e) => {
+                console.log("=== UPLOAD CV BUTTON CLICKED ===");
+                console.log("Event:", e);
+                console.log("selectedCV:", selectedCV);
+                console.log("isUploadingCV:", isUploadingCV);
+                e.preventDefault();
+                e.stopPropagation();
+                if (!selectedCV) {
+                  console.error("No file selected!");
+                  alert("Please select a file first!");
+                  return;
+                }
+                console.log("Calling handleCVUpload...");
+                handleCVUpload();
+              }}
+              disabled={!selectedCV || isUploadingCV}
+              className="gap-2"
+              type="button"
+            >
+              {isUploadingCV ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  {selectedCV ? "Upload CV" : "Select File First"}
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
