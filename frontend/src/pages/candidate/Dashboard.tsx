@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfileCompletion } from "@/hooks/useProfileCompletion";
 import { StatsCard } from "@/components/shared/StatsCard";
 import { MatchScore } from "@/components/shared/MatchScore";
 import { SkillTag } from "@/components/shared/SkillTag";
@@ -104,9 +105,11 @@ const MATCH_THRESHOLD = 70;
 
 export default function CandidateDashboard() {
   const { user } = useAuth();
+  const { completion: profileCompletion } = useProfileCompletion();
   const userName = user?.full_name || "there";
-  const profileCompletion = 75;
-  const missingItems = ["Add portfolio link", "Upload certifications"];
+  const missingItems = profileCompletion === 100 
+    ? [] 
+    : ["Upload CV", "Add portfolio link", "Upload certifications"];
   
   // Check if user has any jobs below threshold
   const hasLowMatchJobs = lowMatchJobs.some(job => job.matchScore < MATCH_THRESHOLD);

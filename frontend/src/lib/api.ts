@@ -44,6 +44,14 @@ apiClient.interceptors.request.use(
     if (config.data instanceof FormData) {
       // Let the browser set Content-Type with boundary for multipart/form-data
       delete config.headers['Content-Type'];
+      console.log('API Request (FormData):', {
+        method: config.method,
+        url: config.url,
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        hasToken: !!token,
+        dataType: 'FormData',
+      });
       return config;
     }
     
@@ -51,17 +59,40 @@ apiClient.interceptors.request.use(
     if (config.data && typeof config.data === 'object') {
       config.data = removeUndefined(config.data);
     }
+    
+    console.log('API Request:', {
+      method: config.method,
+      url: config.url,
+      baseURL: config.baseURL,
+    });
+    
     return config;
   },
   (error) => {
+    console.error('API Request Error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor: Handle 401 errors globally
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('API Response:', {
+      status: response.status,
+      url: response.config.url,
+      method: response.config.method,
+    });
+    return response;
+  },
   (error: AxiosError) => {
+    console.error('API Response Error:', {
+      status: error.response?.status,
+      url: error.config?.url,
+      method: error.config?.method,
+      message: error.message,
+      data: error.response?.data,
+    });
+    
     if (error.response?.status === 401) {
       removeToken();
       if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
