@@ -64,3 +64,6 @@ dist/
 build/
 *.local
 
+# CV Parser (not ready for commit)
+cv-parser/
+
