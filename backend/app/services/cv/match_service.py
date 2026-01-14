@@ -2,41 +2,11 @@
 
 import logging
 import sys
-from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-# Add cv-parser directory to path for imports
-# Find project root by looking for cv-parser directory
-_current_file = Path(__file__).resolve()
-_current_dir = _current_file.parent
-
-# Try to find cv-parser directory by going up the directory tree
-_cv_parser_dir = None
-_search_path = _current_dir
-_max_levels = 10  # Safety limit
-
-for _ in range(_max_levels):
-    _potential_cv_parser = _search_path / "cv-parser"
-    if _potential_cv_parser.exists() and _potential_cv_parser.is_dir():
-        _cv_parser_dir = _potential_cv_parser
-        break
-    if _search_path == _search_path.parent:  # Reached filesystem root
-        break
-    _search_path = _search_path.parent
-
-# Initialize logger early for error reporting
-logger = logging.getLogger(__name__)
-
-if _cv_parser_dir is None:
-    logger.error(f"CV parser directory not found. Searched from: {_current_file}")
-    raise ImportError(
-        "CV parser directory not found. Please ensure cv-parser directory exists "
-        "in the project root (same level as backend directory)."
-    )
-
-# Add compatibility layer for langchain imports BEFORE adding cv-parser to path
-# cv-parser modules use old import paths (langchain.prompts) but LangChain 0.3+ uses langchain_core.prompts
+# Add compatibility layer for langchain imports
+# match_analysis modules use old import paths (langchain.prompts) but LangChain 0.3+ uses langchain_core.prompts
 # We need to inject compatibility shims into sys.modules before any imports happen
 try:
     # Import langchain_core first to get the actual modules
@@ -54,51 +24,22 @@ try:
     langchain.prompts = _core_prompts
     langchain.output_parsers = _core_output_parsers
     
-    logger.debug("LangChain compatibility shims installed: langchain.prompts and langchain.output_parsers")
-    
 except ImportError as langchain_error:
-    logger.error(f"Could not import langchain packages: {langchain_error}")
-    logger.error("Please ensure langchain and langchain-core are installed in your virtual environment")
     raise ImportError(
         f"LangChain packages not available: {langchain_error}. "
         f"Please install: pip install langchain langchain-core langchain-openai"
     )
 except Exception as e:
-    logger.error(f"Error setting up langchain compatibility: {e}", exc_info=True)
-    raise
+    raise ImportError(f"Error setting up langchain compatibility: {e}")
 
-# Add cv-parser directory to Python path if not already there
-if str(_cv_parser_dir) not in sys.path:
-    sys.path.insert(0, str(_cv_parser_dir))
-
-logger.debug(f"CV parser directory found at: {_cv_parser_dir}")
-
-try:
-    from match_analysis.llm_match_education import EducationMatchAgent
-    from match_analysis.llm_match_experience import ExperienceMatchAgent
-    from match_analysis.llm_match_projects import ProjectsMatchAgent
-    from match_analysis.llm_match_certifications import CertificationsMatchAgent
-    from ner_skill_matcher.skill_scoring import compute_skill_weights
-    from ner_skill_matcher.job_skill_db import get_skills_for_job_positions, get_all_job_titles
-    from ner_skill_matcher.ner_filter import match_roles_to_csv_titles
-except ImportError as e:
-    logger.error(f"Failed to import match analysis modules: {e}")
-    logger.error(f"CV parser path: {_cv_parser_dir}, exists: {_cv_parser_dir.exists()}")
-    logger.error(f"Python path (first 5 entries): {sys.path[:5]}")
-    # Check if directories exist
-    match_analysis_dir = _cv_parser_dir / "match_analysis"
-    ner_skill_matcher_dir = _cv_parser_dir / "ner_skill_matcher"
-    logger.error(f"match_analysis directory exists: {match_analysis_dir.exists()}")
-    logger.error(f"ner_skill_matcher directory exists: {ner_skill_matcher_dir.exists()}")
-    if match_analysis_dir.exists():
-        logger.error(f"match_analysis contents: {list(match_analysis_dir.glob('*.py'))}")
-    if ner_skill_matcher_dir.exists():
-        logger.error(f"ner_skill_matcher contents: {list(ner_skill_matcher_dir.glob('*.py'))}")
-    raise ImportError(
-        f"Failed to import match analysis modules: {e}. "
-        f"Please ensure cv-parser directory is in the project root and contains "
-        f"match_analysis and ner_skill_matcher packages."
-    )
+# Import match analysis agents and skill matchers
+from app.services.cv.match_analysis.llm_match_education import EducationMatchAgent
+from app.services.cv.match_analysis.llm_match_experience import ExperienceMatchAgent
+from app.services.cv.match_analysis.llm_match_projects import ProjectsMatchAgent
+from app.services.cv.match_analysis.llm_match_certifications import CertificationsMatchAgent
+from app.services.cv.ner_skill_matcher.skill_scoring import compute_skill_weights
+from app.services.cv.ner_skill_matcher.job_skill_db import get_skills_for_job_positions, get_all_job_titles
+from app.services.cv.ner_skill_matcher.ner_filter import match_roles_to_csv_titles
 
 from app.services.cv.storage_service import get_parsed_cv, store_match_result, generate_timestamp
 

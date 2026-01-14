@@ -40,8 +40,9 @@ dependencies = [
     "python-multipart>=0.0.9",
     
     # AI/LLM
-    # Note: cv-parser modules use old langchain import paths (langchain.prompts, langchain.output_parsers)
-    # LangChain 0.3+ moved these to langchain_core, but compatibility shim is implemented in match_service.py
+    # Note: Match analysis modules (backend/app/services/cv/match_analysis/) use old langchain import paths
+    # (langchain.prompts, langchain.output_parsers). LangChain 0.3+ moved these to langchain_core.
+    # A compatibility shim is implemented in match_service.py to handle this automatically.
     "langchain>=0.3.0",
     "langchain-openai>=1.1.7",
     "langchain-core>=1.2.6",
