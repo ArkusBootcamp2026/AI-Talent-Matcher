@@ -120,11 +120,11 @@ export default function Register() {
           </div>
 
           <Card className="border-0 shadow-elevated">
-            <CardHeader className="text-center pb-2">
+            <CardHeader className="text-center pb-2 px-4 pt-4">
               <CardTitle className="text-2xl">Create Account</CardTitle>
               <CardDescription>Choose your role and get started for free</CardDescription>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="pt-2 px-4 pb-4">
               <Tabs value={role} onValueChange={(v) => setRole(v as "recruiter" | "candidate")} className="mb-6">
                 <TabsList className="grid grid-cols-2 w-full">
                   <TabsTrigger value="recruiter" className="gap-2">

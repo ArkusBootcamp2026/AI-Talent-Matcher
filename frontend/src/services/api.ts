@@ -6,6 +6,8 @@ import type {
   RecruiterSignupRequest,
   LoginRequest,
   AuthResponse,
+  PasswordResetRequest,
+  PasswordResetResponse,
   Profile,
   ProfileUpdate,
   CandidateProfileUpdate,
@@ -16,6 +18,9 @@ import type {
   ApplicationCreate,
   Application,
   JobApplication,
+  CVExtractionResponse,
+  CVUpdateRequest,
+  CVUpdateResponse,
 } from '@/types/api';
 
 // Authentication Services
@@ -31,6 +36,11 @@ export const signupRecruiter = async (data: RecruiterSignupRequest): Promise<Aut
 
 export const login = async (data: LoginRequest): Promise<AuthResponse> => {
   const { data: response } = await apiClient.post<AuthResponse>('/auth/login', data);
+  return response;
+};
+
+export const resetPassword = async (data: PasswordResetRequest): Promise<PasswordResetResponse> => {
+  const { data: response } = await apiClient.post<PasswordResetResponse>('/auth/reset-password', data);
   return response;
 };
 
@@ -159,5 +169,69 @@ export const generateSkills = async (payload: {
   requirements: string;
 }): Promise<{ skills: string[] }> => {
   const { data } = await apiClient.post<{ skills: string[] }>('/llm/skills', payload);
+  return data;
+};
+
+// CV Services
+export const uploadCV = async (file: File): Promise<CVExtractionResponse> => {
+  console.log('uploadCV called with file:', file.name, file.size, file.type);
+  const formData = new FormData();
+  formData.append('file', file);
+  console.log('FormData created, posting to /cv/extract');
+  try {
+    const { data } = await apiClient.post<CVExtractionResponse>('/cv/extract', formData);
+    console.log('CV upload response received:', data);
+    return data;
+  } catch (error) {
+    console.error('Error in uploadCV:', error);
+    throw error;
+  }
+};
+
+export const updateCV = async (updates: CVUpdateRequest): Promise<CVUpdateResponse> => {
+  const { data } = await apiClient.patch<CVUpdateResponse>('/cv/update', updates);
+  return data;
+};
+
+export const getLatestCV = async (): Promise<CVExtractionResponse> => {
+  const { data } = await apiClient.get<CVExtractionResponse>('/cv/latest');
+  return data;
+};
+
+export const getCandidateCV = async (
+  candidateId: string,
+  appliedAt?: string,
+  cvFileTimestamp?: string
+): Promise<CVExtractionResponse> => {
+  const params = new URLSearchParams();
+  if (cvFileTimestamp) {
+    params.set('cv_file_timestamp', cvFileTimestamp);
+  } else if (appliedAt) {
+    params.set('applied_at', appliedAt);
+  }
+  const queryString = params.toString();
+  const { data } = await apiClient.get<CVExtractionResponse>(
+    `/cv/candidate/${candidateId}${queryString ? `?${queryString}` : ''}`
+  );
+  return data;
+};
+
+export const updateApplicationStartDate = async (
+  applicationId: number,
+  startDate: string
+): Promise<{ application_id: number; start_date: string }> => {
+  const { data } = await apiClient.patch<{ application_id: number; start_date: string }>(
+    `/applications/${applicationId}/start-date`,
+    { start_date: startDate }
+  );
+  return data;
+};
+
+export const removeHiredCandidate = async (
+  applicationId: number
+): Promise<{ status: string }> => {
+  const { data } = await apiClient.patch<{ status: string }>(
+    `/applications/${applicationId}/remove-hired`
+  );
   return data;
 };

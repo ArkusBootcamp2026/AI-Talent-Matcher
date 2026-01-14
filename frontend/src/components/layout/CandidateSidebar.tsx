@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfileCompletion } from "@/hooks/useProfileCompletion";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -39,7 +40,7 @@ const menuItems = [
 export function CandidateSidebar() {
   const location = useLocation();
   const { user } = useAuth();
-  const profileCompletion = 75;
+  const { completion: profileCompletion } = useProfileCompletion();
   
   const userName = user?.full_name || "User";
   const userRole = user?.role_title || "Candidate";

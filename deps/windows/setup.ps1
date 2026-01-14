@@ -96,6 +96,18 @@ try {
     exit 1
 }
 
+# Step 6.5: Download SpaCy model (required for match score calculation)
+Write-Host "`n[INFO] Downloading SpaCy language model (en_core_web_sm)..." -ForegroundColor Blue
+Write-Host "   This is required for match score calculation and may take a few minutes..." -ForegroundColor Cyan
+try {
+    python -m spacy download en_core_web_sm
+    Write-Host "[OK] SpaCy model downloaded successfully" -ForegroundColor Green
+} catch {
+    Write-Host "[WARNING] Failed to download SpaCy model automatically." -ForegroundColor Yellow
+    Write-Host "   You may need to run manually: python -m spacy download en_core_web_sm" -ForegroundColor Yellow
+    Write-Host "   Match score calculation will fail without this model." -ForegroundColor Yellow
+}
+
 # Step 7: Check Node.js for frontend
 Write-Host "`n[INFO] Checking Node.js version for frontend..." -ForegroundColor Blue
 $frontendSetup = $false
@@ -106,7 +118,7 @@ try {
     $nodeMajor = [int]$versionParts[0]
     $nodeMinor = [int]$versionParts[1]
     
-    if ($nodeMajor -gt 22 -or ($nodeMajor -eq 22 -and $nodeMinor -ge 12)) {
+    if (($nodeMajor -gt 22) -or (($nodeMajor -eq 22) -and ($nodeMinor -ge 12))) {
         Write-Host "[OK] Node.js $nodeVersion detected" -ForegroundColor Green
         $frontendSetup = $true
     } else {
@@ -123,7 +135,7 @@ if ($frontendSetup) {
     Write-Host "`n[INFO] Setting up frontend dependencies..." -ForegroundColor Blue
     Push-Location frontend
     
-    if (Test-Path "package-lock.json" -or Test-Path "package.json") {
+    if ((Test-Path "package-lock.json") -or (Test-Path "package.json")) {
         Write-Host "   Installing dependencies with npm..." -ForegroundColor Blue
         npm install
         if ($LASTEXITCODE -eq 0) {

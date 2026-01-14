@@ -19,11 +19,13 @@ from app.schemas.auth import (
     RecruiterSignupRequest,
     LoginRequest,
     AuthResponse,
+    PasswordResetRequest,
 )
 from app.services.auth_service import (
     signup_candidate,
     signup_recruiter,
     login_user,
+    reset_password,
 )
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -63,3 +65,14 @@ def login(payload: LoginRequest):
     Authenticates with Supabase Auth and returns an access token.
     """
     return login_user(payload)
+
+
+@router.post("/reset-password")
+def reset_password_endpoint(payload: PasswordResetRequest):
+    """
+    Reset user password.
+
+    Updates the password for a user identified by email.
+    Requires new_password and confirm_password to match.
+    """
+    return reset_password(payload)

@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { MatchScore } from "@/components/shared/MatchScore";
 import { SkillTag } from "@/components/shared/SkillTag";
 import { JobDetailsModal } from "@/components/candidate/JobDetailsModal";
 import { useToast } from "@/hooks/use-toast";
@@ -284,33 +283,30 @@ export default function JobSearch() {
             >
               <CardContent className="p-6">
                 <div className="flex flex-col lg:flex-row gap-6">
-                  {/* Match Score & Save Button - Vertically Centered */}
-                  <div className="flex flex-row lg:flex-col items-center justify-center gap-3">
-                    <MatchScore score={0} size="md" />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => toggleSaveJob(job.id)}
-                      className={savedJobs.includes(job.id) ? "text-primary" : ""}
-                    >
-                      {savedJobs.includes(job.id) ? (
-                        <BookmarkCheck className="w-5 h-5" />
-                      ) : (
-                        <Bookmark className="w-5 h-5" />
-                      )}
-                    </Button>
-                  </div>
-
                   {/* Job Info */}
                   <div className="flex-1 space-y-3">
                     <div className="flex items-start justify-between">
-                      <div>
-                        <button
-                          onClick={() => handleViewDetails(job)}
-                          className="text-xl font-semibold hover:text-primary transition-colors text-left"
-                        >
-                          {job.job_title}
-                        </button>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleViewDetails(job)}
+                            className="text-xl font-semibold hover:text-primary transition-colors text-left"
+                          >
+                            {job.job_title}
+                          </button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => toggleSaveJob(job.id)}
+                            className={`h-8 w-8 ${savedJobs.includes(job.id) ? "text-primary" : ""}`}
+                          >
+                            {savedJobs.includes(job.id) ? (
+                              <BookmarkCheck className="w-5 h-5" />
+                            ) : (
+                              <Bookmark className="w-5 h-5" />
+                            )}
+                          </Button>
+                        </div>
                         {job.company_name && (
                           <div className="flex items-center gap-2 text-muted-foreground mt-1">
                             <Building className="w-4 h-4" />

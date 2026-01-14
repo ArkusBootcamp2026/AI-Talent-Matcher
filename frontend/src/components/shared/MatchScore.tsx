@@ -69,7 +69,7 @@ export function MatchScore({ score, size = "md", showLabel = true, className }: 
           "absolute inset-0 flex items-center justify-center font-bold",
           getScoreColor(score)
         )}>
-          {score}%
+          {Math.round(score)}%
         </div>
       </div>
       {showLabel && (

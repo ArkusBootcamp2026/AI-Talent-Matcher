@@ -1,18 +1,27 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Brain, Briefcase, User, Mail, Lock, ArrowRight } from "lucide-react";
+import { Brain, Mail, Lock, ArrowRight, Eye, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { resetPassword } from "@/services/api";
 import { toast } from "sonner";
 
 export default function Login() {
-  const { signIn, isSigningIn, signInError } = useAuth();
+  const { signIn, isSigningIn } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +37,59 @@ export default function Login() {
         toast.error(message);
       },
     });
+  };
+
+  const handleForgotPasswordClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setShowForgotPassword(true);
+    setResetEmail(email); // Pre-fill with login email if available
+  };
+
+  const handleBackToLogin = () => {
+    setShowForgotPassword(false);
+    setResetEmail("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!resetEmail || !newPassword || !confirmPassword) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      await resetPassword({
+        email: resetEmail,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      toast.success("Password updated successfully! Please sign in with your new password.");
+      // Reset form and return to login
+      handleBackToLogin();
+      // Reload the page to reset state
+      window.location.reload();
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || "Failed to reset password";
+      toast.error(message);
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   return (
@@ -68,63 +130,175 @@ export default function Login() {
 
           <Card className="border-0 shadow-elevated">
             <CardHeader className="text-center pb-2">
-              <CardTitle className="text-2xl">Sign In</CardTitle>
-              <CardDescription>Choose your portal and log in to continue</CardDescription>
+              <CardTitle className="text-2xl">
+                {showForgotPassword ? "Reset Password" : "Sign In"}
+              </CardTitle>
+              <CardDescription>
+                {showForgotPassword 
+                  ? "Enter your email and new password to reset" 
+                  : "Choose your portal and log in to continue"}
+              </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
-
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
-                    />
+              {showForgotPassword ? (
+                <form onSubmit={handlePasswordReset} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
-                    <Link to="/forgot-password" className="text-xs text-primary hover:underline">
-                      Forgot password?
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <div className="relative">
+                      {showNewPassword ? (
+                        <Eye 
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                          onClick={() => setShowNewPassword(false)}
+                        />
+                      ) : (
+                        <Lock 
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                          onClick={() => setShowNewPassword(true)}
+                        />
+                      )}
+                      <Input
+                        id="new-password"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirm Password</Label>
+                    <div className="relative">
+                      {showConfirmPassword ? (
+                        <Eye 
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                          onClick={() => setShowConfirmPassword(false)}
+                        />
+                      ) : (
+                        <Lock 
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                          onClick={() => setShowConfirmPassword(true)}
+                        />
+                      )}
+                      <Input
+                        id="confirm-password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isResetting}
+                    className="w-full gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                  >
+                    {isResetting ? "Resetting..." : "Reset Password"}
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handleBackToLogin}
+                    className="w-full gap-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to Sign In
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="password">Password</Label>
+                        <button
+                          type="button"
+                          onClick={handleForgotPasswordClick}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+                      <div className="relative">
+                        {showPassword ? (
+                          <Eye 
+                            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                            onClick={() => setShowPassword(false)}
+                          />
+                        ) : (
+                          <Lock 
+                            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                            onClick={() => setShowPassword(true)}
+                          />
+                        )}
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={isSigningIn}
+                      className="w-full gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+                    >
+                      {isSigningIn ? "Signing in..." : "Sign In"}
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </form>
+
+                  <div className="mt-6 text-center text-sm text-muted-foreground">
+                    Don't have an account?{" "}
+                    <Link to="/register" className="text-primary hover:underline font-medium">
+                      Create one
                     </Link>
                   </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isSigningIn}
-                  className="w-full gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90"
-                >
-                  {isSigningIn ? "Signing in..." : "Sign In"}
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </form>
-
-              <div className="mt-6 text-center text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <Link to="/register" className="text-primary hover:underline font-medium">
-                  Create one
-                </Link>
-              </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

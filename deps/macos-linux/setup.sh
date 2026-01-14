@@ -85,6 +85,17 @@ fi
 echo -e "${BLUE}✅ Verifying Python installation...${NC}"
 python -c "import fastapi; import uvicorn; print('✅ Core dependencies installed successfully')"
 
+# Step 6.5: Download SpaCy model (required for match score calculation)
+echo -e "${BLUE}📥 Downloading SpaCy language model (en_core_web_sm)...${NC}"
+echo -e "${BLUE}   This is required for match score calculation and may take a few minutes...${NC}"
+if python -m spacy download en_core_web_sm; then
+    echo -e "${GREEN}✅ SpaCy model downloaded successfully${NC}"
+else
+    echo -e "${YELLOW}⚠️  Failed to download SpaCy model automatically.${NC}"
+    echo -e "${YELLOW}   You may need to run manually: python -m spacy download en_core_web_sm${NC}"
+    echo -e "${YELLOW}   Match score calculation will fail without this model.${NC}"
+fi
+
 # Step 7: Check Node.js for frontend
 echo -e "${BLUE}📋 Checking Node.js version for frontend...${NC}"
 if ! command -v node &> /dev/null; then

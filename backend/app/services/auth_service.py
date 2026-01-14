@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.schemas.auth import (
     CandidateSignupRequest,
     RecruiterSignupRequest,
+    PasswordResetRequest,
 )
 
 # Service-role client (required for signup and admin operations)
@@ -226,3 +227,70 @@ def login_user(payload):
         "access_token": auth_response.session.access_token,
         "token_type": "bearer",
     }
+
+
+def reset_password(payload: PasswordResetRequest):
+    """
+    Resets a user's password by email.
+
+    Validates that:
+    - Passwords match
+    - Email exists in the system
+    - Password meets requirements
+
+    Raises:
+    -------
+    HTTP 400 if passwords don't match or user doesn't exist.
+    HTTP 500 if password update fails.
+    """
+
+    # Validate passwords match
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match",
+        )
+
+    # Validate password length (Supabase minimum is typically 6 characters)
+    if len(payload.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters long",
+        )
+
+    # Find user by email using admin client
+    try:
+        # List users and find by email
+        # Note: list_users() returns a list directly
+        users_list = supabase_admin.auth.admin.list_users()
+        user = None
+        
+        for u in users_list:
+            if hasattr(u, 'email') and u.email == payload.email:
+                user = u
+                break
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        # Update password using admin client
+        supabase_admin.auth.admin.update_user_by_id(
+            user.id,
+            {"password": payload.new_password}
+        )
+
+        return {
+            "status": "success",
+            "message": "Password updated successfully",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset password: {str(exc)}",
+        )
