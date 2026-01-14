@@ -130,12 +130,24 @@ export interface ApplicationCreate {
 
 export interface Application {
   id: number;
-  candidate_profile_id: string;
+  candidate_profile_id?: string;
   job_position_id: number;
-  status: 'applied' | 'reviewing' | 'shortlisted' | 'rejected' | 'hired' | 'withdrawn';
+  status: 'applied' | 'reviewing' | 'shortlisted' | 'rejected' | 'hired' | 'withdrawn' | 'interview';
   cover_letter?: string;
   applied_at: string;
   updated_at: string;
+  start_date?: string;
+  job_title?: string;
+  job_description?: string;
+  job_requirements?: string;
+  job_skills?: string;
+  location?: string;
+  employment_type?: string;
+  optional_salary?: number;
+  optional_salary_max?: number;
+  closing_date?: string;
+  job_created_at?: string;
+  company_name?: string;
 }
 
 export interface JobApplication {

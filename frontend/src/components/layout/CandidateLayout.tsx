@@ -1,11 +1,27 @@
 import { Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CandidateSidebar } from "./CandidateSidebar";
 import { Bell, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function CandidateLayout() {
+  const [hasJobConfirmation, setHasJobConfirmation] = useState(false);
+
+  useEffect(() => {
+    const handleJobConfirmed = () => {
+      setHasJobConfirmation(true);
+    };
+
+    window.addEventListener("candidate-job-confirmed", handleJobConfirmed as EventListener);
+
+    return () => {
+      window.removeEventListener("candidate-job-confirmed", handleJobConfirmed as EventListener);
+    };
+  }, []);
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -23,9 +39,22 @@ export function CandidateLayout() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "relative transition-colors",
+                  hasJobConfirmation && "text-primary"
+                )}
+                aria-label="Notifications"
+              >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+                <span
+                  className={cn(
+                    "absolute top-1 right-1 w-2 h-2 rounded-full bg-primary",
+                    hasJobConfirmation && "animate-pulse"
+                  )}
+                />
               </Button>
             </div>
           </header>

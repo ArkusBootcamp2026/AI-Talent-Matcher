@@ -351,7 +351,9 @@ def get_my_applications(
     supabase: Client = Depends(get_supabase),
 ):
     """
-    Returns all applications belonging to the authenticated candidate.
+    Returns all applications belonging to the authenticated candidate with job details.
+    Includes job position information and company name from the recruiter who created the job.
+    Only returns applications for job positions that exist in the recruiter portal.
 
     Security:
     ---------
@@ -359,15 +361,110 @@ def get_my_applications(
     - Prevents exposure of other candidates' applications
     """
 
+    # First, get all applications for this candidate
     response = (
         supabase.table("applications")
-        .select("*")
+        .select("id, status, applied_at, updated_at, cover_letter, job_position_id, start_date")
         .eq("candidate_profile_id", user_id)
         .order("applied_at", desc=True)
         .execute()
     )
 
-    return response.data
+    if not response.data:
+        return []
+
+    # Extract unique job position IDs from applications
+    job_position_ids = list(set([row.get("job_position_id") for row in response.data if row.get("job_position_id")]))
+
+    # Fetch job positions directly to get all job details and recruiter_profile_id
+    jobs_map = {}
+    recruiter_ids = []
+    if job_position_ids:
+        try:
+            jobs_response = (
+                supabase.table("job_position")
+                .select("id, recruiter_profile_id, job_title, job_description, job_requirements, job_skills, location, employment_type, optional_salary, optional_salary_max, closing_date, created_at")
+                .in_("id", job_position_ids)
+                .execute()
+            )
+            if jobs_response.data:
+                for job in jobs_response.data:
+                    jobs_map[job["id"]] = job
+                    recruiter_profile_id = job.get("recruiter_profile_id")
+                    if recruiter_profile_id and recruiter_profile_id not in recruiter_ids:
+                        recruiter_ids.append(recruiter_profile_id)
+                        logger.info(f"Found recruiter_profile_id: {recruiter_profile_id} for job {job['id']}")
+        except Exception as e:
+            logger.error(f"Error fetching job positions: {e}")
+
+    # Fetch recruiter profiles to get company names
+    recruiters_map = {}
+    if recruiter_ids:
+        try:
+            logger.info(f"Fetching recruiter profiles for {len(recruiter_ids)} IDs: {recruiter_ids}")
+            recruiters_response = (
+                supabase.table("recruiter_profiles")
+                .select("profile_id, company_name")
+                .in_("profile_id", recruiter_ids)
+                .execute()
+            )
+            
+            logger.info(f"Recruiter profiles query returned {len(recruiters_response.data) if recruiters_response.data else 0} results")
+            if recruiters_response.data:
+                for recruiter in recruiters_response.data:
+                    profile_id = recruiter.get("profile_id")
+                    company_name = recruiter.get("company_name")
+                    logger.info(f"Recruiter data: profile_id={profile_id}, company_name={repr(company_name)}, type={type(company_name)}, full record keys: {list(recruiter.keys())}")
+                    if profile_id:
+                        # Handle both None and empty string cases
+                        company_name_value = company_name if company_name else None
+                        recruiters_map[profile_id] = company_name_value
+                        logger.info(f"Mapped recruiter {profile_id} -> company_name: {repr(company_name_value)}")
+            else:
+                logger.warning(f"No recruiter profiles found for IDs: {recruiter_ids}")
+        except Exception as e:
+            logger.error(f"Error fetching recruiter profiles: {e}")
+
+    # Transform response to include job details at top level
+    applications = []
+    for row in response.data or []:
+        job_position_id = row.get("job_position_id")
+        job_position = jobs_map.get(job_position_id, {}) if job_position_id else {}
+        
+        # Get recruiter_profile_id from job position and lookup company name
+        recruiter_profile_id = job_position.get("recruiter_profile_id")
+        company_name = recruiters_map.get(recruiter_profile_id) if recruiter_profile_id else None
+        
+        # Debug logging - check if company_name is None, empty string, or has value
+        if recruiter_profile_id:
+            mapped_value = recruiters_map.get(recruiter_profile_id)
+            logger.info(f"Application {row['id']}: recruiter_profile_id={recruiter_profile_id}, mapped company_name={repr(mapped_value)}, final company_name={repr(company_name)}")
+            if not company_name:
+                logger.warning(f"No company name found for recruiter_profile_id: {recruiter_profile_id}, available IDs in map: {list(recruiters_map.keys())}, mapped value: {repr(mapped_value)}")
+        
+        application_data = {
+            "id": row["id"],
+            "status": row["status"],
+            "applied_at": row["applied_at"],
+            "updated_at": row["updated_at"],
+            "cover_letter": row.get("cover_letter"),
+            "job_position_id": row["job_position_id"],
+            "start_date": row.get("start_date"),
+            "job_title": job_position.get("job_title"),
+            "job_description": job_position.get("job_description"),
+            "job_requirements": job_position.get("job_requirements"),
+            "job_skills": job_position.get("job_skills"),
+            "location": job_position.get("location"),
+            "employment_type": job_position.get("employment_type"),
+            "optional_salary": job_position.get("optional_salary"),
+            "optional_salary_max": job_position.get("optional_salary_max"),
+            "closing_date": job_position.get("closing_date"),
+            "job_created_at": job_position.get("created_at"),
+            "company_name": company_name,
+        }
+        applications.append(application_data)
+    
+    return applications
 
 @router.patch("/{application_id}/status")
 def update_application_status(
