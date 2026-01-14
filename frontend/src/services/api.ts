@@ -215,3 +215,23 @@ export const getCandidateCV = async (
   );
   return data;
 };
+
+export const updateApplicationStartDate = async (
+  applicationId: number,
+  startDate: string
+): Promise<{ application_id: number; start_date: string }> => {
+  const { data } = await apiClient.patch<{ application_id: number; start_date: string }>(
+    `/applications/${applicationId}/start-date`,
+    { start_date: startDate }
+  );
+  return data;
+};
+
+export const removeHiredCandidate = async (
+  applicationId: number
+): Promise<{ status: string }> => {
+  const { data } = await apiClient.patch<{ status: string }>(
+    `/applications/${applicationId}/remove-hired`
+  );
+  return data;
+};

@@ -22,7 +22,7 @@ from typing import Optional
 
 from app.api.deps import get_current_user, require_recruiter
 from app.db.supabase import get_supabase
-from app.schemas.application import ApplicationCreate
+from app.schemas.application import ApplicationCreate, StartDateUpdate
 from app.services.cv.storage_service import get_latest_cv_file_info
 
 logger = logging.getLogger(__name__)
@@ -386,8 +386,10 @@ def update_application_status(
     """
 
     allowed_statuses = {
+        "applied",
         "reviewing",
         "shortlisted",
+        "interview",
         "rejected",
         "hired",
     }
@@ -395,7 +397,7 @@ def update_application_status(
     if status not in allowed_statuses:
         raise HTTPException(
             status_code=400,
-            detail="Invalid application status",
+            detail=f"Invalid application status. Allowed values: {', '.join(sorted(allowed_statuses))}",
         )
 
     try:
@@ -453,6 +455,173 @@ def withdraw_application(
         )
 
     return {"status": "withdrawn"}
+
+
+@router.patch("/{application_id}/start-date")
+def update_application_start_date(
+    application_id: int,
+    payload: StartDateUpdate,
+    recruiter=Depends(require_recruiter),
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Updates the start date for a hired candidate.
+    
+    Security:
+    ---------
+    - Only recruiters can update start dates
+    - Only applications with status='hired' can have start dates updated
+    - Recruiter must own the job for this application
+    """
+    from datetime import datetime
+    
+    start_date = payload.start_date
+    
+    # Validate date format
+    try:
+        datetime.strptime(start_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Use YYYY-MM-DD format.",
+        )
+    
+    # Verify application exists and is hired
+    app_check = (
+        supabase.table("applications")
+        .select("id, status, job_position_id")
+        .eq("id", application_id)
+        .maybe_single()
+        .execute()
+    )
+    
+    if not app_check.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found",
+        )
+    
+    if app_check.data.get("status") != "hired":
+        raise HTTPException(
+            status_code=400,
+            detail="Start date can only be set for applications with 'hired' status",
+        )
+    
+    # Verify recruiter owns the job
+    job_check = (
+        supabase.table("job_position")
+        .select("id")
+        .eq("id", app_check.data["job_position_id"])
+        .eq("recruiter_profile_id", recruiter["id"])
+        .maybe_single()
+        .execute()
+    )
+    
+    if not job_check.data:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to update this application",
+        )
+    
+    # Update start date
+    try:
+        response = (
+            supabase.table("applications")
+            .update({"start_date": start_date})
+            .eq("id", application_id)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to update start date: {exc}",
+        )
+    
+    if not response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found",
+        )
+    
+    return {
+        "application_id": application_id,
+        "start_date": start_date,
+    }
+
+
+@router.patch("/{application_id}/remove-hired")
+def remove_hired_candidate(
+    application_id: int,
+    recruiter=Depends(require_recruiter),
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Removes a candidate from the hired list by changing status back to 'applied'.
+    
+    Security:
+    ---------
+    - Only recruiters can remove hired candidates
+    - Only applications with status='hired' can be removed
+    - Recruiter must own the job for this application
+    """
+    # Verify application exists and is hired
+    app_check = (
+        supabase.table("applications")
+        .select("id, status, job_position_id")
+        .eq("id", application_id)
+        .maybe_single()
+        .execute()
+    )
+    
+    if not app_check.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found",
+        )
+    
+    if app_check.data.get("status") != "hired":
+        raise HTTPException(
+            status_code=400,
+            detail="Only hired candidates can be removed",
+        )
+    
+    # Verify recruiter owns the job
+    job_check = (
+        supabase.table("job_position")
+        .select("id")
+        .eq("id", app_check.data["job_position_id"])
+        .eq("recruiter_profile_id", recruiter["id"])
+        .maybe_single()
+        .execute()
+    )
+    
+    if not job_check.data:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to update this application",
+        )
+    
+    # Change status back to 'applied' and clear start_date
+    try:
+        response = (
+            supabase.table("applications")
+            .update({"status": "applied", "start_date": None})
+            .eq("id", application_id)
+            .execute()
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to remove hired candidate: {exc}",
+        )
+    
+    if not response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Application not found",
+        )
+    
+    return {"status": "removed"}
 
 
 # ---------------------------------------------------------------------
@@ -518,6 +687,9 @@ def get_all_applications_for_recruiter(
                 applied_at,
                 cover_letter,
                 job_position_id,
+                cv_file_timestamp,
+                cv_file_path,
+                start_date,
                 candidate_profiles (
                     profile_id,
                     location,
@@ -565,6 +737,9 @@ def get_all_applications_for_recruiter(
                 "cover_letter": row["cover_letter"],
                 "job_position_id": row["job_position_id"],
                 "job_title": job_titles_map.get(row["job_position_id"], ""),
+                "cv_file_timestamp": row.get("cv_file_timestamp"),
+                "cv_file_path": row.get("cv_file_path"),
+                "start_date": row.get("start_date"),
                 "candidate": {
                     "id": profile.get("id"),
                     "full_name": profile.get("full_name"),
@@ -623,6 +798,8 @@ def get_applications_for_job(
                 status,
                 applied_at,
                 cover_letter,
+                cv_file_timestamp,
+                cv_file_path,
                 candidate_profiles (
                     profile_id,
                     location,
@@ -667,6 +844,9 @@ def get_applications_for_job(
                 "display_status": display_status,  # UI-friendly status
                 "applied_at": row["applied_at"],
                 "cover_letter": row["cover_letter"],
+                "cv_file_timestamp": row.get("cv_file_timestamp"),
+                "cv_file_path": row.get("cv_file_path"),
+                "start_date": row.get("start_date"),
                 "candidate": {
                     "id": profile.get("id"),
                     "full_name": profile.get("full_name"),

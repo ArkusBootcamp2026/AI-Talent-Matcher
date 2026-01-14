@@ -33,7 +33,7 @@ const menuItems = [
   { title: "Vacancies", url: "/recruiter/vacancies", icon: Briefcase },
   { title: "Applications", url: "/recruiter/applications", icon: Users },
   { title: "Candidate Pipeline", url: "/recruiter/pipeline", icon: Users },
-  { title: "Accepted Candidates", url: "/recruiter/accepted", icon: UserCheck },
+  { title: "Hired Candidates", url: "/recruiter/accepted", icon: UserCheck },
   { title: "AI Chatbot", url: "/recruiter/chatbot", icon: MessageSquare },
 ];
 

@@ -102,7 +102,7 @@ export default function CandidatePipeline() {
   const handleAccept = (applicationId: number) => {
     updateStatusMutation.mutate({
       applicationId,
-      status: "hired", // Backend uses "hired" but displays as "accepted"
+      status: "applied", // Set to "applied" status when accepting (default status for accepted candidates)
     });
     // Navigate to ManageApplications page to show the accepted candidate
     navigate("/recruiter/applications");

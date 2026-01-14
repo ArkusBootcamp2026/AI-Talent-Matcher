@@ -79,8 +79,10 @@ def list_my_jobs(
 ):
     """
     Returns all jobs owned by the authenticated recruiter.
+    Includes application count for each job (all applications, regardless of status).
     """
 
+    # Fetch all jobs for the recruiter
     response = (
         supabase.table("job_position")
         .select("*")
@@ -88,7 +90,33 @@ def list_my_jobs(
         .execute()
     )
 
-    return response.data
+    jobs = response.data
+    if not jobs:
+        return []
+
+    # Get application counts for all jobs
+    job_ids = [job["id"] for job in jobs]
+    
+    # Count applications per job (all statuses including rejected)
+    applications_response = (
+        supabase.table("applications")
+        .select("job_position_id")
+        .in_("job_position_id", job_ids)
+        .execute()
+    )
+    
+    # Count applications per job_id
+    application_counts = {}
+    if applications_response.data:
+        for app in applications_response.data:
+            job_id = app["job_position_id"]
+            application_counts[job_id] = application_counts.get(job_id, 0) + 1
+    
+    # Add application_count to each job
+    for job in jobs:
+        job["application_count"] = application_counts.get(job["id"], 0)
+    
+    return jobs
 
 
 @router.get("/{job_id}")

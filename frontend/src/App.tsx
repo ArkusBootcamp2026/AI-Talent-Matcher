@@ -18,7 +18,7 @@ import Vacancies from "./pages/recruiter/Vacancies";
 import VacancyCreate from "./pages/recruiter/VacancyCreate";
 import CandidatePipeline from "./pages/recruiter/CandidatePipeline";
 import CandidateProfile from "./pages/recruiter/CandidateProfile";
-import AcceptedCandidates from "./pages/recruiter/AcceptedCandidates";
+import HiredCandidates from "./pages/recruiter/HiredCandidates";
 import ManageApplications from "./pages/recruiter/ManageApplications";
 import Settings from "./pages/recruiter/Settings";
 import Chatbot from "./pages/recruiter/Chatbot";
@@ -62,7 +62,7 @@ const App = () => (
             <Route path="vacancies/:id/edit" element={<VacancyCreate />} />
             <Route path="pipeline" element={<CandidatePipeline />} />
             <Route path="candidates/:id" element={<CandidateProfile />} />
-            <Route path="accepted" element={<AcceptedCandidates />} />
+            <Route path="accepted" element={<HiredCandidates />} />
             <Route path="applications" element={<ManageApplications />} />
             <Route path="chatbot" element={<Chatbot />} />
             <Route path="settings" element={<Settings />} />

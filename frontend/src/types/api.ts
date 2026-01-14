@@ -119,6 +119,7 @@ export interface JobPosition {
   status: 'open' | 'closed' | 'draft';
   created_at: string;
   company_name?: string;
+  application_count?: number; // Total number of applications (all statuses)
 }
 
 // Application Types
@@ -147,6 +148,7 @@ export interface JobApplication {
   cover_letter?: string;
   job_position_id?: number;
   job_title?: string;
+  start_date?: string; // Start date for hired candidates (ISO date string)
   candidate: {
     id: string;
     full_name: string;

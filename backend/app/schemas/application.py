@@ -31,3 +31,7 @@ class ApplicationOut(BaseModel):
     job_position_id: int
     status: str
     applied_at: datetime
+
+
+class StartDateUpdate(BaseModel):
+    start_date: str

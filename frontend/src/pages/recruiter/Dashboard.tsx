@@ -119,13 +119,13 @@ export default function RecruiterDashboard() {
           subtitle="Need your attention"
           icon={Clock}
         />
-        {/* Accepted Candidates Shortcut */}
+        {/* Hired Candidates Shortcut */}
         <Link to="/recruiter/accepted">
           <Card className="glass-card hover-lift cursor-pointer h-full group">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Accepted</p>
+                  <p className="text-sm text-muted-foreground">Hired</p>
                   <p className="text-2xl font-bold">3</p>
                   <p className="text-xs text-muted-foreground">View & manage hires</p>
                 </div>

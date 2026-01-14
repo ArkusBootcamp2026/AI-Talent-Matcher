@@ -1,6 +1,6 @@
 """Storage service for CV files in Supabase Storage"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from supabase import Client
 import json
@@ -200,10 +200,11 @@ def get_parsed_cv_at_datetime(
     Returns:
         Parsed CV data as dictionary (the latest CV that existed at target_datetime)
     """
-    from datetime import datetime
-    
     try:
         target_dt = datetime.fromisoformat(target_datetime.replace('Z', '+00:00'))
+        # Ensure target_dt is timezone-aware (if it's naive, assume UTC)
+        if target_dt.tzinfo is None:
+            target_dt = target_dt.replace(tzinfo=timezone.utc)
     except:
         # Fallback to latest if datetime parsing fails
         return get_parsed_cv(supabase, user_id, timestamp=None)
@@ -238,7 +239,10 @@ def get_parsed_cv_at_datetime(
             if len(parts) >= 2:
                 date_str = parts[0]  # YYYYMMDD
                 time_str = parts[1]  # HHMMSS
-                file_dt = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+                # Parse as naive datetime, then make it timezone-aware (assume UTC)
+                file_dt_naive = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+                # Make timezone-aware by assuming UTC (since we don't know the timezone, UTC is safest)
+                file_dt = file_dt_naive.replace(tzinfo=timezone.utc)
         except:
             pass
         
@@ -248,15 +252,24 @@ def get_parsed_cv_at_datetime(
             if file_created_at:
                 try:
                     file_dt = datetime.fromisoformat(file_created_at.replace('Z', '+00:00'))
+                    # Ensure file_dt is timezone-aware
+                    if file_dt.tzinfo is None:
+                        file_dt = file_dt.replace(tzinfo=timezone.utc)
                 except:
                     pass
         
         # Only add file if we successfully parsed a datetime and it's before or at target
-        if file_dt and file_dt <= target_dt:
-            valid_files.append((file_info, file_dt))
-            logger.info(f"[Storage] get_parsed_cv_at_datetime: File {filename} has datetime {file_dt} (<= {target_dt}) - VALID")
-        elif file_dt:
-            logger.info(f"[Storage] get_parsed_cv_at_datetime: File {filename} has datetime {file_dt} (> {target_dt}) - SKIPPED")
+        # Both datetimes should now be timezone-aware
+        if file_dt:
+            # Ensure file_dt is timezone-aware (should already be, but double-check)
+            if file_dt.tzinfo is None:
+                file_dt = file_dt.replace(tzinfo=timezone.utc)
+            
+            if file_dt <= target_dt:
+                valid_files.append((file_info, file_dt))
+                logger.info(f"[Storage] get_parsed_cv_at_datetime: File {filename} has datetime {file_dt} (<= {target_dt}) - VALID")
+            else:
+                logger.info(f"[Storage] get_parsed_cv_at_datetime: File {filename} has datetime {file_dt} (> {target_dt}) - SKIPPED")
     
     if not valid_files:
         raise ValueError(f"No CV found for user {user_id} at datetime {target_datetime}")

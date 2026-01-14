@@ -276,7 +276,7 @@ export default function Vacancies() {
                     >
                       <div className="flex items-center gap-1.5 text-xl font-bold">
                         <Users className="w-4 h-4 text-primary" />
-                        0
+                        {job.application_count ?? 0}
                       </div>
                       <p className="text-xs text-muted-foreground">Candidates</p>
                     </Link>
