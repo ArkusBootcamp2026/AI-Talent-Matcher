@@ -9,10 +9,11 @@ and route the user based on their role.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from supabase import Client
+from supabase import Client, create_client
 
 from app.api.deps import get_current_user
 from app.db.supabase import get_supabase
+from app.core.config import settings
 
 router = APIRouter(tags=["Me"])
 
@@ -32,6 +33,24 @@ def get_me(
     - Users are fully initialized at signup time
     - Role-specific profiles always exist
     """
+
+    # Get email from Supabase Auth using admin client
+    user_email = None
+    try:
+        from app.services.auth_service import supabase_admin
+        # Get user by ID from admin client
+        admin_user = supabase_admin.auth.admin.get_user_by_id(user_id)
+        if admin_user and hasattr(admin_user, 'user') and admin_user.user:
+            user_email = admin_user.user.email
+    except Exception:
+        # If we can't get email from admin client, try to get it from the token
+        try:
+            # Get user from the current session token
+            auth_user = supabase.auth.get_user()
+            if auth_user and auth_user.user:
+                user_email = auth_user.user.email
+        except Exception:
+            user_email = None
 
     # ------------------------------------------------------------------
     # Base profile (shared identity)
@@ -73,6 +92,7 @@ def get_me(
         "role_title": profile.get("role_title"),
         "phone": profile.get("phone"),
         "avatar_url": profile.get("avatar_url"),
+        "email": user_email,
     }
 
     # ------------------------------------------------------------------

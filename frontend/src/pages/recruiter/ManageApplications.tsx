@@ -43,7 +43,6 @@ const statusOptions: { value: ApplicationStatus; label: string }[] = [
   { value: "shortlisted", label: "Shortlisted" },
   { value: "rejected", label: "Rejected" },
   { value: "hired", label: "Hired" },
-  { value: "withdrawn", label: "Withdrawn" },
 ];
 
 export default function ManageApplications() {
@@ -286,14 +285,14 @@ export default function ManageApplications() {
           />
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[180px] bg-muted/50 border-muted-foreground/20 hover:bg-muted">
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
+          <SelectContent className="bg-muted/95 border-muted-foreground/20">
+            <SelectItem value="all" className="hover:bg-muted-foreground/10">All Status</SelectItem>
             {statusOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
+              <SelectItem key={option.value} value={option.value} className="hover:bg-muted-foreground/10">
                 {option.label}
               </SelectItem>
             ))}
@@ -385,14 +384,14 @@ export default function ManageApplications() {
                           handleStatusChange(app.application_id, value)
                         }
                       >
-                        <SelectTrigger className="w-[160px]">
+                        <SelectTrigger className="w-[160px] bg-muted/50 border-muted-foreground/20 hover:bg-muted">
                           <Badge variant="outline" className={getStatusColor(app.status)}>
                             {getStatusLabel(app.status)}
                           </Badge>
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-muted/95 border-muted-foreground/20">
                           {statusOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
+                            <SelectItem key={option.value} value={option.value} className="hover:bg-muted-foreground/10">
                               <Badge variant="outline" className={getStatusColor(option.value)}>
                                 {option.label}
                               </Badge>

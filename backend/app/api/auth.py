@@ -14,19 +14,24 @@ Signup is treated as a domain operation:
 
 from fastapi import APIRouter, HTTPException
 
+from fastapi import Depends
+
 from app.schemas.auth import (
     CandidateSignupRequest,
     RecruiterSignupRequest,
     LoginRequest,
     AuthResponse,
     PasswordResetRequest,
+    EmailUpdateRequest,
 )
 from app.services.auth_service import (
     signup_candidate,
     signup_recruiter,
     login_user,
     reset_password,
+    update_email,
 )
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -76,3 +81,17 @@ def reset_password_endpoint(payload: PasswordResetRequest):
     Requires new_password and confirm_password to match.
     """
     return reset_password(payload)
+
+
+@router.patch("/update-email")
+def update_email_endpoint(
+    payload: EmailUpdateRequest,
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Update user email.
+
+    Updates the email for the currently authenticated user.
+    Requires authentication via JWT token.
+    """
+    return update_email(user_id, payload.new_email)

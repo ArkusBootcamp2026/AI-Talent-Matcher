@@ -294,3 +294,53 @@ def reset_password(payload: PasswordResetRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reset password: {str(exc)}",
         )
+
+
+def update_email(user_id: str, new_email: str):
+    """
+    Updates a user's email address.
+
+    Validates that:
+    - New email is valid format
+    - User exists
+
+    Raises:
+    -------
+    HTTP 400 if email is invalid or already in use.
+    HTTP 404 if user not found.
+    HTTP 500 if email update fails.
+    """
+
+    try:
+        # Update email using admin client
+        supabase_admin.auth.admin.update_user_by_id(
+            user_id,
+            {"email": new_email, "email_confirm": True}
+        )
+
+        return {
+            "status": "success",
+            "message": "Email updated successfully",
+            "new_email": new_email,
+        }
+
+    except Exception as exc:
+        error_message = str(exc).lower()
+        
+        # Check for common error cases
+        if "already registered" in error_message or "already exists" in error_message:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email address is already in use",
+            )
+        
+        if "not found" in error_message:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update email: {str(exc)}",
+        )

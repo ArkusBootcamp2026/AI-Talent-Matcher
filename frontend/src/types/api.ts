@@ -39,6 +39,16 @@ export interface PasswordResetResponse {
   message: string;
 }
 
+export interface EmailUpdateRequest {
+  new_email: string;
+}
+
+export interface EmailUpdateResponse {
+  status: string;
+  message: string;
+  new_email: string;
+}
+
 // Profile Types
 export interface Profile {
   id: string;
@@ -47,6 +57,7 @@ export interface Profile {
   role_title?: string;
   phone?: string;
   avatar_url?: string;
+  email?: string;
   candidate_profile?: {
     location?: string;
     last_upload_file?: string;

@@ -78,7 +78,6 @@ export default function Applications() {
           break;
 
         case "reviewing":
-        case "shortlisted":
           progress = 50;
           progressColor = "bg-primary";
           timeline = [
@@ -88,6 +87,18 @@ export default function Applications() {
             { step: "Decision", date: "TBD", completed: false },
           ];
           statusMessage = "Your CV is under review. We'll update you soon.";
+          break;
+
+        case "shortlisted":
+          progress = 60;
+          progressColor = "bg-primary";
+          timeline = [
+            { step: "Applied", date: format(appliedDate, "MMM d"), completed: true },
+            { step: "CV Review", date: format(updatedDate, "MMM d"), completed: true },
+            { step: "Shortlisted", date: format(updatedDate, "MMM d"), completed: true, current: true },
+            { step: "Decision", date: "TBD", completed: false },
+          ];
+          statusMessage = "Great news! You've been shortlisted. We'll contact you soon about next steps.";
           break;
 
         case "interview":
@@ -172,10 +183,15 @@ export default function Applications() {
           </Badge>
         );
       case "reviewing":
-      case "shortlisted":
         return (
           <Badge className="bg-primary/10 text-primary border-primary/30">
             Under Review
+          </Badge>
+        );
+      case "shortlisted":
+        return (
+          <Badge className="bg-primary/10 text-primary border-primary/30">
+            Shortlisted
           </Badge>
         );
       case "applied":

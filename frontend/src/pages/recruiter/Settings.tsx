@@ -9,9 +9,8 @@ import { Separator } from "@/components/ui/separator";
 import { ImageUpload } from "@/components/shared/ImageUpload";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { updateProfile, uploadAvatar, updateRecruiterProfile } from "@/services/api";
+import { updateRecruiterProfile, resetPassword, updateEmail } from "@/services/api";
 import {
-  User,
   Mail,
   Lock,
   Bell,
@@ -24,18 +23,11 @@ export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingCompany, setIsSavingCompany] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-
-  const [profileData, setProfileData] = useState({
-    full_name: "",
-    role_title: "",
-    avatar_url: "",
-  });
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   const [accountSettings, setAccountSettings] = useState({
-    email: "jane.doe@company.com",
+    email: user?.email || "",
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
@@ -56,96 +48,20 @@ export default function Settings() {
   // Load user data
   useEffect(() => {
     if (user) {
-      setProfileData({
-        full_name: user.full_name || "",
-        role_title: user.role_title || "",
-        avatar_url: user.avatar_url || "",
+      setAccountSettings((prev) => ({
+        ...prev,
+        email: user.email || "",
+      }));
+    }
+    if (user?.recruiter_profile) {
+      setCompanyInfo({
+        companyName: user.recruiter_profile.company_name || "",
+        website: "https://techcorp.com",
       });
-      if (user.recruiter_profile) {
-        setCompanyInfo({
-          companyName: user.recruiter_profile.company_name || "",
-          website: "https://techcorp.com",
-        });
-      }
     }
   }, [user]);
 
-  const handleSaveProfile = async () => {
-    setIsSavingProfile(true);
-    try {
-      // Upload image first if selected
-      // The upload_avatar endpoint already updates the profile with avatar_url
-      if (selectedImage) {
-        const uploadResult = await uploadAvatar(selectedImage);
-        
-        // Update local state with the new avatar URL from server response
-        const newAvatarUrl = uploadResult.avatar_url || uploadResult.profile?.avatar_url;
-        setProfileData((prev) => ({
-          ...prev,
-          avatar_url: newAvatarUrl || prev.avatar_url,
-        }));
-        setSelectedImage(null);
-        
-        // Update the user data in the cache immediately with the response from server
-        if (uploadResult.profile) {
-          queryClient.setQueryData(["currentUser"], uploadResult.profile);
-        }
-      }
-
-      // Update profile with other fields (full_name, role_title) if they changed
-      // Do NOT include avatar_url here since it's already updated by upload_avatar
-      const hasChanges = 
-        profileData.full_name !== (user?.full_name || "") ||
-        profileData.role_title !== (user?.role_title || "");
-
-      if (hasChanges) {
-        const updatePayload: { full_name?: string; role_title?: string } = {};
-        
-        if (profileData.full_name !== (user?.full_name || "")) {
-          updatePayload.full_name = profileData.full_name;
-        }
-        
-        if (profileData.role_title !== (user?.role_title || "")) {
-          updatePayload.role_title = profileData.role_title;
-        }
-
-        const updateResult = await updateProfile(updatePayload);
-        
-        // Update cache with the updated profile
-        if (updateResult.data) {
-          queryClient.setQueryData(["currentUser"], updateResult.data);
-        }
-      }
-
-      // Invalidate and refetch to ensure we have the latest data from server
-      await queryClient.invalidateQueries({ queryKey: ["currentUser"] });
-      await queryClient.refetchQueries({ queryKey: ["currentUser"] });
-
-      toast({
-        title: "Profile Updated",
-        description: "Your profile has been saved successfully.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error?.response?.data?.detail || "Failed to update profile",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSavingProfile(false);
-    }
-  };
-
-  const handleImageSelect = (file: File) => {
-    setSelectedImage(file);
-  };
-
-  const handleImageRemove = () => {
-    setSelectedImage(null);
-    setProfileData((prev) => ({ ...prev, avatar_url: "" }));
-  };
-
-  const handleSaveAccount = () => {
+  const handleSaveAccount = async () => {
     if (accountSettings.newPassword && accountSettings.newPassword !== accountSettings.confirmPassword) {
       toast({
         title: "Error",
@@ -154,16 +70,76 @@ export default function Settings() {
       });
       return;
     }
-    toast({
-      title: "Account Updated",
-      description: "Your account settings have been saved.",
-    });
-    setAccountSettings((prev) => ({
-      ...prev,
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    }));
+
+    if (accountSettings.newPassword && accountSettings.newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingPassword(true);
+    try {
+      let emailUpdated = false;
+      let passwordUpdated = false;
+
+      // Update email if it has changed
+      if (accountSettings.email && accountSettings.email !== user?.email) {
+        await updateEmail({
+          new_email: accountSettings.email,
+        });
+        emailUpdated = true;
+        // Invalidate queries to refresh user data
+        queryClient.invalidateQueries({ queryKey: ["currentUser"] });
+      }
+
+      // Update password if new password is provided
+      if (accountSettings.newPassword && accountSettings.confirmPassword) {
+        // Use reset-password endpoint with user's email (use new email if updated, otherwise current)
+        const emailToUse = emailUpdated ? accountSettings.email : user?.email;
+        if (!emailToUse) {
+          throw new Error("User email not found");
+        }
+
+        await resetPassword({
+          email: emailToUse,
+          new_password: accountSettings.newPassword,
+          confirm_password: accountSettings.confirmPassword,
+        });
+        passwordUpdated = true;
+      }
+
+      if (emailUpdated || passwordUpdated) {
+        toast({
+          title: "Account Updated",
+          description: "Your account settings have been saved.",
+        });
+      } else {
+        toast({
+          title: "No Changes",
+          description: "No changes were made to your account.",
+        });
+        return;
+      }
+
+      // Clear password fields
+      setAccountSettings((prev) => ({
+        ...prev,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      }));
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.response?.data?.detail || "Failed to update account",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
   const handleSaveNotifications = () => {
@@ -204,72 +180,6 @@ export default function Settings() {
           Manage your account and preferences
         </p>
       </div>
-
-      {/* Profile Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <User className="w-5 h-5 text-primary" />
-            Profile Settings
-          </CardTitle>
-          <CardDescription>
-            Update your profile information
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Profile Picture */}
-          <div className="space-y-2">
-            <Label>Profile Picture</Label>
-            <ImageUpload
-              currentImageUrl={profileData.avatar_url}
-              onImageSelect={handleImageSelect}
-              onImageRemove={handleImageRemove}
-              maxSizeMB={5}
-            />
-          </div>
-
-          <Separator />
-
-          {/* Full Name */}
-          <div className="space-y-2">
-            <Label htmlFor="full_name">Full Name</Label>
-            <Input
-              id="full_name"
-              value={profileData.full_name}
-              onChange={(e) =>
-                setProfileData({ ...profileData, full_name: e.target.value })
-              }
-            />
-          </div>
-
-          {/* Role Title */}
-          <div className="space-y-2">
-            <Label htmlFor="role_title">Role</Label>
-            <Input
-              id="role_title"
-              value={profileData.role_title}
-              onChange={(e) =>
-                setProfileData({ ...profileData, role_title: e.target.value })
-              }
-              placeholder="e.g. HR Manager, Senior Recruiter"
-            />
-            <p className="text-xs text-muted-foreground">
-              Enter your job title or position
-            </p>
-          </div>
-
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSaveProfile}
-              disabled={isSavingProfile}
-              className="gap-2"
-            >
-              <Save className="w-4 h-4" />
-              {isSavingProfile ? "Saving..." : "Save Profile"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Account Settings */}
       <Card>
@@ -357,9 +267,13 @@ export default function Settings() {
           </div>
 
           <div className="flex justify-end pt-4">
-            <Button onClick={handleSaveAccount} className="gap-2">
+            <Button
+              onClick={handleSaveAccount}
+              disabled={isSavingPassword}
+              className="gap-2"
+            >
               <Save className="w-4 h-4" />
-              Save Account Settings
+              {isSavingPassword ? "Saving..." : "Save Account Settings"}
             </Button>
           </div>
         </CardContent>

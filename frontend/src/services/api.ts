@@ -8,6 +8,8 @@ import type {
   AuthResponse,
   PasswordResetRequest,
   PasswordResetResponse,
+  EmailUpdateRequest,
+  EmailUpdateResponse,
   Profile,
   ProfileUpdate,
   CandidateProfileUpdate,
@@ -41,6 +43,11 @@ export const login = async (data: LoginRequest): Promise<AuthResponse> => {
 
 export const resetPassword = async (data: PasswordResetRequest): Promise<PasswordResetResponse> => {
   const { data: response } = await apiClient.post<PasswordResetResponse>('/auth/reset-password', data);
+  return response;
+};
+
+export const updateEmail = async (data: EmailUpdateRequest): Promise<EmailUpdateResponse> => {
+  const { data: response } = await apiClient.patch<EmailUpdateResponse>('/auth/update-email', data);
   return response;
 };
 
