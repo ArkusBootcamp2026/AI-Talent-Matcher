@@ -227,29 +227,71 @@ try {
     exit 1
 }
 
-# Step 6.5: Upgrade pip to prevent package installation issues
-Write-Host "`n[INFO] Upgrading pip to latest version..." -ForegroundColor Blue
-try {
-    python -m pip install --upgrade pip --quiet
-    Write-Host "[OK] Pip upgraded successfully" -ForegroundColor Green
-} catch {
-    Write-Host "[WARNING] Failed to upgrade pip. Continuing anyway..." -ForegroundColor Yellow
+# Step 6.5: Ensure pip is installed and upgraded
+Write-Host "`n[INFO] Checking pip installation..." -ForegroundColor Blue
+
+# Check if pip exists
+$pipCheck = python -m pip --version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[INFO] Pip is not installed. Installing pip..." -ForegroundColor Blue
+    python -m ensurepip --upgrade 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[OK] Pip installed successfully" -ForegroundColor Green
+    } else {
+        Write-Host "[WARNING] Failed to install pip via ensurepip. Trying alternative method..." -ForegroundColor Yellow
+        # Try installing pip using get-pip.py as fallback
+        $getPipUrl = "https://bootstrap.pypa.io/get-pip.py"
+        try {
+            $getPipScript = Invoke-WebRequest -Uri $getPipUrl -UseBasicParsing
+            $getPipScript.Content | python - 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "[OK] Pip installed successfully via get-pip.py" -ForegroundColor Green
+            } else {
+                Write-Host "[WARNING] Failed to install pip. SpaCy model download may fail." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host "[WARNING] Could not download get-pip.py. SpaCy model download may fail." -ForegroundColor Yellow
+        }
+    }
+}
+
+# Upgrade pip if it exists
+$pipCheckAfter = python -m pip --version 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "[INFO] Upgrading pip to latest version..." -ForegroundColor Blue
+    python -m pip install --upgrade pip --quiet 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[OK] Pip upgraded successfully" -ForegroundColor Green
+    } else {
+        Write-Host "[WARNING] Failed to upgrade pip. Continuing anyway..." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "[WARNING] Pip is still not available. Some operations may fail." -ForegroundColor Yellow
 }
 
 # Step 7.6: Download SpaCy model (required for match score calculation)
 Write-Host "`n[INFO] Downloading SpaCy language model (en_core_web_sm)..." -ForegroundColor Blue
 Write-Host "   This is required for match score calculation and may take a few minutes..." -ForegroundColor Cyan
 Write-Host "   Note: SpaCy models are downloaded separately from Python packages." -ForegroundColor Cyan
-$spacyResult = python -m spacy download en_core_web_sm 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "[OK] SpaCy model downloaded successfully" -ForegroundColor Green
-} else {
-    Write-Host "[WARNING] Failed to download SpaCy model automatically." -ForegroundColor Yellow
-    Write-Host "   Exit code: $LASTEXITCODE" -ForegroundColor Yellow
-    Write-Host "   Error output: $spacyResult" -ForegroundColor Yellow
-    Write-Host "   You may need to run manually: python -m spacy download en_core_web_sm" -ForegroundColor Yellow
+
+# Verify pip is available before attempting SpaCy download
+python -m pip --version 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[WARNING] Pip is not available. Cannot download SpaCy model." -ForegroundColor Yellow
+    Write-Host "   Please install pip manually, then run: python -m spacy download en_core_web_sm" -ForegroundColor Yellow
     Write-Host "   Match score calculation will fail without this model." -ForegroundColor Yellow
-    Write-Host "   The backend will start, but match scores cannot be calculated until the model is installed." -ForegroundColor Yellow
+} else {
+    $spacyResult = python -m spacy download en_core_web_sm 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[OK] SpaCy model downloaded successfully" -ForegroundColor Green
+    } else {
+        Write-Host "[WARNING] Failed to download SpaCy model automatically." -ForegroundColor Yellow
+        Write-Host "   Exit code: $LASTEXITCODE" -ForegroundColor Yellow
+        Write-Host "   Error output: $spacyResult" -ForegroundColor Yellow
+        Write-Host "   You may need to run manually: python -m spacy download en_core_web_sm" -ForegroundColor Yellow
+        Write-Host "   Match score calculation will fail without this model." -ForegroundColor Yellow
+        Write-Host "   The backend will start, but match scores cannot be calculated until the model is installed." -ForegroundColor Yellow
+    }
 }
 
 # Step 7: Check Node.js for frontend

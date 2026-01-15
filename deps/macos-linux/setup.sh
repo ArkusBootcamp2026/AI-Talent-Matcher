@@ -195,25 +195,60 @@ else
     exit 1
 fi
 
-# Step 6.5: Upgrade pip to prevent package installation issues
-echo -e "${BLUE}📦 Upgrading pip to latest version...${NC}"
-if python -m pip install --upgrade pip --quiet; then
-    echo -e "${GREEN}✅ Pip upgraded successfully${NC}"
+# Step 6.5: Ensure pip is installed and upgraded
+echo -e "${BLUE}📦 Checking pip installation...${NC}"
+
+# Check if pip exists
+if ! python -m pip --version >/dev/null 2>&1; then
+    echo -e "${BLUE}   Pip is not installed. Installing pip...${NC}"
+    if python -m ensurepip --upgrade >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Pip installed successfully${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Failed to install pip via ensurepip. Trying alternative method...${NC}"
+        # Try installing pip using get-pip.py as fallback
+        if command -v curl >/dev/null 2>&1; then
+            if curl -sSL https://bootstrap.pypa.io/get-pip.py | python - >/dev/null 2>&1; then
+                echo -e "${GREEN}✅ Pip installed successfully via get-pip.py${NC}"
+            else
+                echo -e "${YELLOW}⚠️  Failed to install pip. SpaCy model download may fail.${NC}"
+            fi
+        else
+            echo -e "${YELLOW}⚠️  curl not found. Cannot install pip via get-pip.py. SpaCy model download may fail.${NC}"
+        fi
+    fi
+fi
+
+# Upgrade pip if it exists
+if python -m pip --version >/dev/null 2>&1; then
+    echo -e "${BLUE}   Upgrading pip to latest version...${NC}"
+    if python -m pip install --upgrade pip --quiet >/dev/null 2>&1; then
+        echo -e "${GREEN}✅ Pip upgraded successfully${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Failed to upgrade pip. Continuing anyway...${NC}"
+    fi
 else
-    echo -e "${YELLOW}⚠️  Failed to upgrade pip. Continuing anyway...${NC}"
+    echo -e "${YELLOW}⚠️  Pip is still not available. Some operations may fail.${NC}"
 fi
 
 # Step 7.6: Download SpaCy model (required for match score calculation)
 echo -e "${BLUE}📥 Downloading SpaCy language model (en_core_web_sm)...${NC}"
 echo -e "${BLUE}   This is required for match score calculation and may take a few minutes...${NC}"
 echo -e "${BLUE}   Note: SpaCy models are downloaded separately from Python packages.${NC}"
-if python -m spacy download en_core_web_sm 2>&1; then
-    echo -e "${GREEN}✅ SpaCy model downloaded successfully${NC}"
-else
-    echo -e "${YELLOW}⚠️  Failed to download SpaCy model automatically.${NC}"
-    echo -e "${YELLOW}   You may need to run manually: python -m spacy download en_core_web_sm${NC}"
+
+# Verify pip is available before attempting SpaCy download
+if ! python -m pip --version >/dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️  Pip is not available. Cannot download SpaCy model.${NC}"
+    echo -e "${YELLOW}   Please install pip manually, then run: python -m spacy download en_core_web_sm${NC}"
     echo -e "${YELLOW}   Match score calculation will fail without this model.${NC}"
-    echo -e "${YELLOW}   The backend will start, but match scores cannot be calculated until the model is installed.${NC}"
+else
+    if python -m spacy download en_core_web_sm 2>&1; then
+        echo -e "${GREEN}✅ SpaCy model downloaded successfully${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Failed to download SpaCy model automatically.${NC}"
+        echo -e "${YELLOW}   You may need to run manually: python -m spacy download en_core_web_sm${NC}"
+        echo -e "${YELLOW}   Match score calculation will fail without this model.${NC}"
+        echo -e "${YELLOW}   The backend will start, but match scores cannot be calculated until the model is installed.${NC}"
+    fi
 fi
 
 # Step 7: Check Node.js for frontend
