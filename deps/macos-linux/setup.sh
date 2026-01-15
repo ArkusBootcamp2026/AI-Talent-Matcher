@@ -91,7 +91,12 @@ else
     
     for pref_version in "${PREFERRED_VERSIONS[@]}"; do
         echo -e "${BLUE}   Checking for Python $pref_version...${NC}"
-        if uv python find "$pref_version" >/dev/null 2>&1; then
+        # Temporarily disable exit on error to allow checking multiple versions
+        set +e
+        uv python find "$pref_version" >/dev/null 2>&1
+        FIND_EXIT_CODE=$?
+        set -e
+        if [ $FIND_EXIT_CODE -eq 0 ]; then
             PYTHON_VERSION_FOR_VENV="$pref_version"
             echo -e "${GREEN}✅ Found Python $pref_version via UV${NC}"
             break
@@ -101,7 +106,12 @@ else
     if [ -z "$PYTHON_VERSION_FOR_VENV" ]; then
         # Try to install Python 3.12 via UV
         echo -e "${BLUE}   Attempting to install Python 3.12 via UV...${NC}"
-        if uv python install 3.12 >/dev/null 2>&1; then
+        # Temporarily disable exit on error to allow graceful failure
+        set +e
+        uv python install 3.12 >/dev/null 2>&1
+        INSTALL_EXIT_CODE=$?
+        set -e
+        if [ $INSTALL_EXIT_CODE -eq 0 ]; then
             PYTHON_VERSION_FOR_VENV="3.12"
             echo -e "${GREEN}✅ Installed Python 3.12 via UV${NC}"
         else

@@ -100,11 +100,15 @@ if ($script:detectedMajor -eq 3 -and $script:detectedMinor -ge 10 -and $script:d
     foreach ($prefVersion in $preferredVersions) {
         # Try to find or install Python version via UV
         Write-Host "   Checking for Python $prefVersion..." -ForegroundColor Cyan
-        $pythonCheck = uv python find $prefVersion 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            $pythonVersionForVenv = $prefVersion
-            Write-Host "[OK] Found Python $prefVersion via UV" -ForegroundColor Green
-            break
+        try {
+            $null = uv python find $prefVersion 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $pythonVersionForVenv = $prefVersion
+                Write-Host "[OK] Found Python $prefVersion via UV" -ForegroundColor Green
+                break
+            }
+        } catch {
+            # Silently continue to next version if this one is not found
         }
     }
     
