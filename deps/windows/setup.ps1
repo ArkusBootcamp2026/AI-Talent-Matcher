@@ -230,12 +230,27 @@ try {
 # Step 6.5: Ensure pip is installed and upgraded
 Write-Host "`n[INFO] Checking pip installation..." -ForegroundColor Blue
 
-# Check if pip exists
-python -m pip --version 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[INFO] Pip is not installed. Installing pip..." -ForegroundColor Blue
-    python -m ensurepip --upgrade 2>&1 | Out-Null
+# Check if pip exists (suppress all output and errors)
+$pipExists = $false
+try {
+    $null = python -m pip --version 2>$null
     if ($LASTEXITCODE -eq 0) {
+        $pipExists = $true
+    }
+} catch {
+    $pipExists = $false
+}
+
+if (-not $pipExists) {
+    Write-Host "[INFO] Pip is not installed. Installing pip..." -ForegroundColor Blue
+    try {
+        $null = python -m ensurepip --upgrade 2>$null
+        $ensurepipSuccess = ($LASTEXITCODE -eq 0)
+    } catch {
+        $ensurepipSuccess = $false
+    }
+    
+    if ($ensurepipSuccess) {
         Write-Host "[OK] Pip installed successfully" -ForegroundColor Green
     } else {
         Write-Host "[WARNING] Failed to install pip via ensurepip. Trying alternative method..." -ForegroundColor Yellow
@@ -243,24 +258,40 @@ if ($LASTEXITCODE -ne 0) {
         $getPipUrl = "https://bootstrap.pypa.io/get-pip.py"
         try {
             $getPipScript = Invoke-WebRequest -Uri $getPipUrl -UseBasicParsing
-            $getPipScript.Content | python - 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host "[OK] Pip installed successfully via get-pip.py" -ForegroundColor Green
-            } else {
-                Write-Host "[WARNING] Failed to install pip. SpaCy model download may fail." -ForegroundColor Yellow
-            }
+            $null = $getPipScript.Content | python - 2>$null
+            $getpipSuccess = ($LASTEXITCODE -eq 0)
         } catch {
+            $getpipSuccess = $false
             Write-Host "[WARNING] Could not download get-pip.py. SpaCy model download may fail." -ForegroundColor Yellow
+        }
+        
+        if ($getpipSuccess) {
+            Write-Host "[OK] Pip installed successfully via get-pip.py" -ForegroundColor Green
+        } else {
+            Write-Host "[WARNING] Failed to install pip. SpaCy model download may fail." -ForegroundColor Yellow
         }
     }
 }
 
 # Upgrade pip if it exists
-python -m pip --version 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) {
+$pipExistsAfter = $false
+try {
+    $null = python -m pip --version 2>$null
+    $pipExistsAfter = ($LASTEXITCODE -eq 0)
+} catch {
+    $pipExistsAfter = $false
+}
+
+if ($pipExistsAfter) {
     Write-Host "[INFO] Upgrading pip to latest version..." -ForegroundColor Blue
-    python -m pip install --upgrade pip --quiet 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) {
+    try {
+        $null = python -m pip install --upgrade pip --quiet 2>$null
+        $upgradeSuccess = ($LASTEXITCODE -eq 0)
+    } catch {
+        $upgradeSuccess = $false
+    }
+    
+    if ($upgradeSuccess) {
         Write-Host "[OK] Pip upgraded successfully" -ForegroundColor Green
     } else {
         Write-Host "[WARNING] Failed to upgrade pip. Continuing anyway..." -ForegroundColor Yellow
@@ -275,14 +306,28 @@ Write-Host "   This is required for match score calculation and may take a few m
 Write-Host "   Note: SpaCy models are downloaded separately from Python packages." -ForegroundColor Cyan
 
 # Verify pip is available before attempting SpaCy download
-python -m pip --version 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
+$pipAvailable = $false
+try {
+    $null = python -m pip --version 2>$null
+    $pipAvailable = ($LASTEXITCODE -eq 0)
+} catch {
+    $pipAvailable = $false
+}
+
+if (-not $pipAvailable) {
     Write-Host "[WARNING] Pip is not available. Cannot download SpaCy model." -ForegroundColor Yellow
     Write-Host "   Please install pip manually, then run: python -m spacy download en_core_web_sm" -ForegroundColor Yellow
     Write-Host "   Match score calculation will fail without this model." -ForegroundColor Yellow
 } else {
-    $spacyResult = python -m spacy download en_core_web_sm 2>&1
-    if ($LASTEXITCODE -eq 0) {
+    try {
+        $spacyResult = python -m spacy download en_core_web_sm 2>&1
+        $spacySuccess = ($LASTEXITCODE -eq 0)
+    } catch {
+        $spacySuccess = $false
+        $spacyResult = $_.Exception.Message
+    }
+    
+    if ($spacySuccess) {
         Write-Host "[OK] SpaCy model downloaded successfully" -ForegroundColor Green
     } else {
         Write-Host "[WARNING] Failed to download SpaCy model automatically." -ForegroundColor Yellow
