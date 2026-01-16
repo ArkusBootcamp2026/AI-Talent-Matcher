@@ -2,14 +2,10 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.127.0-009688?style=flat&logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18.3-61DAFB?style=flat&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-2.27-3ECF8E?style=flat&logo=supabase&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-412991?style=flat&logo=openai&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-0.3+-1C3C3C?style=flat&logo=langchain&logoColor=white)
 ![SpaCy](https://img.shields.io/badge/SpaCy-3.7+-09A3D5?style=flat&logo=spacy&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-7.3-646CFF?style=flat&logo=vite&logoColor=white)
 
 Intelligent technical recruitment platform that automates candidate evaluation and vacancy creation using AI agents. The system analyzes CVs, evaluates alignment with job requirements, and produces an objective Match Score to support faster, data-driven hiring decisions.
 
@@ -26,9 +22,11 @@ Intelligent technical recruitment platform that automates candidate evaluation a
 
 Before starting, make sure you have installed:
 
-- **Python 3.10, 3.11, or 3.12** - [Download Python](https://www.python.org/downloads/)
-  - ⚠️ **Note**: Python 3.13+ may have compatibility issues with C extensions (e.g., pyroaring). 
-  - ✅ **Recommended**: Python 3.11 or 3.12 for best compatibility
+- **Python 3.12.2** - Automatically managed by UV via `.python-version`
+  - This project uses **UV** for Python dependency management
+  - Python 3.12.2 is automatically selected via `.python-version` file
+  - UV will automatically download and install Python 3.12.2 if it's not present
+  - ⚠️ **Note**: Python 3.13+ is not compatible with C extensions (e.g., pyroaring, SpaCy, PyMuPDF)
 - **Node.js 22.12.0 or higher** - [Download Node.js](https://nodejs.org/)
 - **UV** (installed automatically with setup scripts) - [More information about UV](https://github.com/astral-sh/uv)
 
@@ -49,13 +47,20 @@ The project includes setup scripts that automate the entire installation:
 
 **Linux/macOS (Bash):**
 ```bash
-# Grant execution permissions and run
+# Grant execution permissions (if needed)
 chmod +x deps/macos-linux/setup.sh deps/macos-linux/run-dev.sh
+
+# Run setup script
 ./deps/macos-linux/setup.sh
 
 # Or with pyproject.toml alternative:
 ./deps/macos-linux/setup.sh --pyproject
 ```
+
+> **Note for macOS/Linux**: If you encounter "Permission denied" errors, grant execution permissions first:
+> ```bash
+> chmod +x deps/macos-linux/setup.sh deps/macos-linux/run-dev.sh
+> ```
 
 The setup scripts automatically perform:
 1. ✅ Python and Node.js verification
@@ -69,23 +74,45 @@ The setup scripts automatically perform:
 
 If you prefer to install manually:
 
-#### Backend
+#### Backend - Windows
+
+```powershell
+# 1. Install UV (if not installed)
+irm https://astral.sh/uv/install.ps1 | iex
+
+# 2. Create virtual environment
+uv venv
+
+# 3. Activate virtual environment
+.\.venv\Scripts\Activate.ps1
+
+# 4. Upgrade pip to prevent package installation issues
+python -m pip install --upgrade pip
+
+# 5. Install backend dependencies
+# Using requirements.txt (default):
+uv pip install -r deps/requirements.txt
+
+# Or using pyproject.toml (alternative):
+cd deps
+uv pip install -e .
+cd ..
+
+# 6. Download SpaCy language model (required for match score calculation)
+# Note: SpaCy models are downloaded separately from Python packages
+python -m spacy download en_core_web_sm
+```
+
+#### Backend - macOS/Linux
 
 ```bash
 # 1. Install UV (if not installed)
-# Windows PowerShell:
-irm https://astral.sh/uv/install.ps1 | iex
-
-# Linux/macOS:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 2. Create virtual environment
 uv venv
 
 # 3. Activate virtual environment
-# Windows:
-.\.venv\Scripts\Activate.ps1
-# Unix/Linux/macOS:
 source .venv/bin/activate
 
 # 4. Upgrade pip to prevent package installation issues
@@ -104,6 +131,11 @@ cd ..
 # Note: SpaCy models are downloaded separately from Python packages
 python -m spacy download en_core_web_sm
 ```
+
+> **Note for macOS/Linux**: If you encounter permission errors when running scripts, grant execution permissions first:
+> ```bash
+> chmod +x deps/macos-linux/setup.sh deps/macos-linux/run-dev.sh
+> ```
 
 #### Frontend
 
@@ -154,8 +186,17 @@ ENVIRONMENT=development
 
 **Linux/macOS:**
 ```bash
+# Grant execution permissions (if needed)
+chmod +x deps/macos-linux/run-dev.sh
+
+# Run development servers
 ./deps/macos-linux/run-dev.sh
 ```
+
+> **Note for macOS/Linux**: If you encounter "Permission denied" errors, grant execution permissions first:
+> ```bash
+> chmod +x deps/macos-linux/run-dev.sh
+> ```
 
 This command will start:
 - **Backend API** at: http://localhost:8000
@@ -193,76 +234,25 @@ npm run dev
 AI-Talent-Matcher/
 ├── backend/                        # FastAPI Backend
 │   └── app/
-│       ├── api/                    # API Endpoints (auth, jobs, applications, cv, etc.)
+│       ├── api/                    # API Endpoints
 │       ├── agents/                 # AI Agents
-│       │   ├── cv_extraction/      # CV parsing agents (identity, education, experience, etc.)
-│       │   ├── llm_job_description.py
-│       │   ├── llm_requirements.py
-│       │   └── llm_skills.py
 │       ├── core/                   # Configuration and security
-│       │   ├── config.py           # Environment variables and settings
-│       │   └── security.py        # JWT and authentication
 │       ├── db/                     # Database connection
-│       │   └── supabase.py        # Supabase client
 │       ├── schemas/                # Pydantic models
-│       │   ├── application.py
-│       │   ├── auth.py
-│       │   ├── cv/                # CV-related schemas (extraction, match, update)
-│       │   ├── job.py
-│       │   └── profile_updates.py
 │       ├── services/               # Business logic
-│       │   ├── auth_service.py
-│       │   └── cv/                # CV processing services
-│       │       ├── extraction_service.py    # CV parsing orchestration
-│       │       ├── match_service.py         # Match score calculation
-│       │       ├── storage_service.py       # Supabase Storage operations
-│       │       ├── match_analysis/          # LLM match agents (education, experience, projects, certifications)
-│       │       ├── ner_skill_matcher/       # NER-based skill matching
-│       │       └── db/                     # Job skills CSV database
-│       ├── utils/                  # Utility functions
-│       │   ├── pdf_extractor.py   # PDF text extraction
-│       │   └── retry.py           # Retry logic
-│       └── main.py                 # Application entry point
-├── frontend/                       # React + Vite Frontend
+│       └── main.py                # Application entry point
+├── frontend/                       # Frontend Application
 │   └── src/
-│       ├── components/             # React components
-│       │   ├── candidate/         # Candidate-specific components
-│       │   ├── layout/            # Layout components (sidebars, navigation)
-│       │   ├── shared/            # Shared components (MatchScore, ImageUpload, etc.)
-│       │   └── ui/                # Shadcn UI components
+│       ├── components/            # React components
 │       ├── pages/                 # Application pages
-│       │   ├── candidate/         # Candidate portal pages
-│       │   ├── recruiter/        # Recruiter portal pages
-│       │   └── [Index, Login, Register, Landing, NotFound].tsx
 │       ├── services/              # API services
-│       │   └── api.ts            # API client
-│       ├── hooks/                 # Custom React hooks
-│       │   ├── useApi.ts
-│       │   ├── useAuth.ts
-│       │   └── use-toast.ts
-│       ├── lib/                   # Utility libraries
-│       │   ├── api.ts            # API configuration
-│       │   ├── auth.ts            # Authentication utilities
-│       │   └── utils.ts          # General utilities
-│       └── types/                 # TypeScript definitions
-│           └── api.ts            # API type definitions
+│       └── hooks/                 # Custom React hooks
 ├── deps/                           # Dependencies and setup scripts
-│   ├── requirements.txt           # Python dependencies (default)
-│   ├── pyproject.toml             # Python project configuration (alternative)
+│   ├── requirements.txt           # Python dependencies
 │   ├── windows/                   # Windows setup scripts
-│   │   ├── setup.ps1              # Setup script (Windows)
-│   │   └── run-dev.ps1            # Run both servers (Windows)
-│   └── macos-linux/                # macOS/Linux setup scripts
-│       ├── setup.sh                # Setup script (Unix/Linux/macOS)
-│       └── run-dev.sh              # Run both servers (Unix/Linux/macOS)
+│   └── macos-linux/               # macOS/Linux setup scripts
 ├── docs/                           # Documentation
-│   ├── migrations/                # Database migration scripts
-│   ├── database/                  # Database documentation
-│   └── [various documentation files]
-├── cv-parser/                     # CV parsing module (gitignored, optional)
-├── .venv/                          # Python virtual environment (generated)
-├── .env.example                    # Environment variables template
-└── README.md                       # This file
+└── .python-version                 # Python version (3.12.2)
 ```
 
 ## 🌐 Access URLs
@@ -322,16 +312,10 @@ npm run build
 
 ### Frontend
 - **React 18.3.1** - UI library for building user interfaces
-- **TypeScript 5.8.3** - Static type checking
-- **Vite 7.3.0** - Build tool and development server
-- **TailwindCSS 3.4.17** - Utility-first CSS framework
 - **Shadcn UI** - High-quality UI components based on Radix UI
 - **React Query (TanStack Query) 5.83.0** - Server state management and caching
 - **Axios 1.13.2** - HTTP client for API requests
 - **React Router 6.30.1** - Client-side routing
-- **React Hook Form 7.61.1** - Form state management
-- **Zod 3.25.76** - Schema validation
-- **Lucide React** - Icon library
 
 ### Development Tools
 - **UV** - Ultra-fast Python package manager (10-100x faster than pip)
@@ -351,10 +335,11 @@ npm run build
    - UV is 10-100x faster than pip
    - Compatible with `requirements.txt` and `pyproject.toml`
    - You can use `uv pip` as a direct replacement for `pip`
+   - Python 3.12.2 is automatically selected via `.python-version` file
+   - UV will automatically download and use Python 3.12.2 in the project virtual environment
 
 3. **Node.js**:
    - Requires Node.js >=22.12.0 (according to `package.json`)
-   - Frontend uses Vite + React + TypeScript
 
 4. **Database**:
    - Project uses Supabase (PostgreSQL)
@@ -369,9 +354,10 @@ npm run build
 
 ### Error: "Python version too new" or "Failed to build pyroaring"
 - **Cause**: Python 3.13+ may have compatibility issues with C extensions
-- **Solution**: Use Python 3.11 or 3.12 instead
-- Download from: https://www.python.org/downloads/
-- On Windows: Install Visual Studio Build Tools with "Desktop development with C++" workload
+- **Solution**: The project uses `.python-version` to enforce Python 3.12.2
+  - UV will automatically download and use Python 3.12.2 when you run `uv sync` or `uv run`
+  - No manual Python installation needed - UV handles it automatically
+  - On Windows: Install Visual Studio Build Tools with "Desktop development with C++" workload if you encounter build errors
 
 ### Error: "Cannot open include file: 'io.h'" (Windows)
 - **Cause**: Missing C++ build tools
@@ -386,7 +372,7 @@ npm run build
 
 ### Error: "Module not found" (Backend)
 - Make sure the virtual environment is activated
-- Verify you're using Python 3.10-3.12 (not 3.13+)
+- UV automatically uses Python 3.12.2 via `.python-version` (no manual verification needed)
 - Run: `uv pip install -r deps/requirements.txt`
 - Or use pyproject.toml: `cd deps && uv pip install -e . && cd ..`
 
