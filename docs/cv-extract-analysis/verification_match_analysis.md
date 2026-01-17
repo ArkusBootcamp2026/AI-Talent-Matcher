@@ -160,7 +160,7 @@ curl -X POST "http://localhost:8000/cv/match" \
 1. **Calculation still in progress** - Wait 30-60 seconds and refresh
 2. **No CV uploaded** - Candidate needs to upload a CV first
 3. **Background task failed** - Check backend logs for errors
-4. **Database column missing** - Run the migration: `docs/migrations/add_match_score_to_applications.sql`
+4. **Database column missing** - Ensure `match_score` exists on `applications` (included in `docs/migrations/006_table_applications.sql` for fresh setup; add the column manually if migrating an existing DB).
 
 **Solution:**
 - Check backend logs for errors

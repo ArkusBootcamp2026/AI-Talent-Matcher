@@ -109,6 +109,23 @@ python -m spacy download en_core_web_sm
 # 1. Install UV (if not installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
+# 1.1. Verify UV installation and PATH configuration
+# Reload your shell to ensure UV is available
+source ~/.zshrc  # or source ~/.bashrc if using bash
+
+# Verify the PATH includes UV
+echo $PATH
+
+# UV is typically installed in:
+# ~/.local/bin
+
+# If UV is not in your PATH, add this to ~/.zshrc (or ~/.bashrc):
+# export PATH="$HOME/.local/bin:$PATH"
+# Then reload: source ~/.zshrc
+
+# Verify UV is accessible
+uv --version
+
 # 2. Create virtual environment
 uv venv
 
@@ -344,7 +361,7 @@ npm run build
 4. **Database**:
    - Project uses Supabase (PostgreSQL)
    - Make sure you have Supabase environment variables configured
-   - Check `docs/migrations/` for migration scripts
+   - Check `docs/supabase/migrations/` for migration scripts
 
 ## 🐛 Troubleshooting
 

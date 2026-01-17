@@ -67,3 +67,5 @@ build/
 # CV Parser (not ready for commit)
 cv-parser/
 
+# Cursor IDE
+.cursor/
