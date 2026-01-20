@@ -1,3 +1,4 @@
+import React from "react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { LucideIcon } from "lucide-react";
@@ -12,6 +13,7 @@ interface StatsCardProps {
     positive: boolean;
   };
   className?: string;
+  children?: React.ReactNode;
 }
 
 export function StatsCard({
@@ -21,11 +23,12 @@ export function StatsCard({
   icon: Icon,
   trend,
   className,
+  children,
 }: StatsCardProps) {
   return (
     <Card className={cn("hover-lift overflow-hidden", className)}>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground font-medium">{title}</p>
             <div className="flex items-baseline gap-2">
@@ -51,6 +54,7 @@ export function StatsCard({
             <Icon className="w-6 h-6 text-primary" />
           </div>
         </div>
+        {children && <div className="mt-3">{children}</div>}
       </CardContent>
     </Card>
   );

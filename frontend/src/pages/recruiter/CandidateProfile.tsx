@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { getCandidateCV } from "@/services/api";
-import type { CVExtractionResponse } from "@/types/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getCandidateCV, downloadCandidateCV, getAllRecruiterApplications, updateApplicationStatus } from "@/services/api";
+import type { CVExtractionResponse, JobApplication } from "@/types/api";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,19 +18,23 @@ import {
   Phone,
   MapPin,
   Download,
-  Send,
   Briefcase,
   GraduationCap,
   Award,
   CheckCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export default function CandidateProfile() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const cvFileTimestamp = searchParams.get('cv_file_timestamp');
   const appliedAt = searchParams.get('applied_at');
+  const applicationIdParam = searchParams.get('application_id');
+  const [isSkillsExpanded, setIsSkillsExpanded] = useState(false);
 
   // Log the parameters to debug
   console.log('[CandidateProfile] Component rendered:', {
@@ -71,6 +77,32 @@ export default function CandidateProfile() {
     refetchOnMount: true, // Always refetch when component mounts
   });
 
+  // Fetch applications to find the application ID if not provided
+  const { data: applications = [] } = useQuery<JobApplication[]>({
+    queryKey: ["recruiterApplications"],
+    queryFn: () => getAllRecruiterApplications(),
+    enabled: !applicationIdParam && !!id,
+  });
+
+  // Find application ID for this candidate
+  const applicationId = applicationIdParam 
+    ? parseInt(applicationIdParam, 10)
+    : applications.find((app) => app.candidate.id === id)?.application_id;
+
+  // Mutation for accepting candidate
+  const acceptMutation = useMutation({
+    mutationFn: ({ applicationId, status }: { applicationId: number; status: string }) =>
+      updateApplicationStatus(applicationId, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recruiterApplications"] });
+      toast.success("Candidate accepted successfully");
+      navigate("/recruiter/applications");
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || "Failed to accept candidate");
+    },
+  });
+
   // Extract data from CV
   const identity = cvData?.cv_data?.identity || {};
   const experience = cvData?.cv_data?.experience || [];
@@ -79,6 +111,46 @@ export default function CandidateProfile() {
     ? [...(cvData.cv_data.skills_analysis.explicit_skills || []), ...(cvData.cv_data.skills_analysis.job_related_skills || [])]
     : [];
   const uniqueSkills = Array.from(new Set(skills));
+
+  // Handle download CV
+  const handleDownloadCV = async () => {
+    if (!id) return;
+    
+    try {
+      const blob = await downloadCandidateCV(
+        id,
+        appliedAt || undefined,
+        cvFileTimestamp || undefined
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${identity.full_name || 'CV'}_${cvFileTimestamp || 'latest'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      toast.success("CV downloaded successfully");
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Failed to download CV");
+    }
+  };
+
+  // Handle accept candidate
+  const handleAcceptCandidate = () => {
+    if (!applicationId) {
+      toast.error("Application ID not found");
+      return;
+    }
+    
+    acceptMutation.mutate({
+      applicationId,
+      status: "applied", // Set to "applied" status when accepting
+    });
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -133,19 +205,17 @@ export default function CandidateProfile() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={handleDownloadCV}>
             <Download className="w-4 h-4" />
             Download CV
           </Button>
-          <Link to="/recruiter/accepted">
-            <Button variant="outline" className="gap-2 text-success border-success/30 hover:bg-success/10">
-              <CheckCircle className="w-4 h-4" />
-              Accept Candidate
-            </Button>
-          </Link>
-          <Button className="gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90">
-            <Send className="w-4 h-4" />
-            Send Interview Invite
+          <Button 
+            className="gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90"
+            onClick={handleAcceptCandidate}
+            disabled={!applicationId || acceptMutation.isPending}
+          >
+            <CheckCircle className="w-4 h-4" />
+            Accept Candidate
           </Button>
         </div>
       </div>
@@ -200,22 +270,44 @@ export default function CandidateProfile() {
 
           {/* Skills */}
           {uniqueSkills.length > 0 && (
-            <Card>
+            <Card className="bg-gradient-to-br from-success/10 via-primary/5 to-accent/10 border-success/30 hover:border-success/50 transition-all">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Award className="w-5 h-5 text-primary" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-success to-primary flex items-center justify-center">
+                    <Award className="w-4 h-4 text-primary-foreground" />
+                  </div>
                   Skills & Expertise
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  {uniqueSkills.map((skill) => (
+                  {(isSkillsExpanded ? uniqueSkills : uniqueSkills.slice(0, 5)).map((skill) => (
                     <SkillTag
                       key={skill}
                       skill={skill}
                     />
                   ))}
                 </div>
+                {uniqueSkills.length > 5 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full mt-3 text-primary hover:text-primary/80"
+                    onClick={() => setIsSkillsExpanded(!isSkillsExpanded)}
+                  >
+                    {isSkillsExpanded ? (
+                      <>
+                        <ChevronUp className="w-4 h-4 mr-1" />
+                        Show Less
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 mr-1" />
+                        Show {uniqueSkills.length - 5} More
+                      </>
+                    )}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}
@@ -230,7 +322,7 @@ export default function CandidateProfile() {
                 <CardTitle className="text-lg">Professional Summary</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground leading-relaxed">
+                <p className="text-sm text-muted-foreground">
                   {identity.introduction}
                 </p>
               </CardContent>

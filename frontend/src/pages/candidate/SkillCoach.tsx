@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AILoadingIndicator } from "@/components/shared/AILoadingIndicator";
 import { MatchScore } from "@/components/shared/MatchScore";
 import {
@@ -20,6 +21,7 @@ import {
   ArrowRight,
   BookOpen,
   Award,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Message {
@@ -205,9 +207,18 @@ Try asking "How can I reach 100% match?" or "What certifications should I get?"`
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-6 animate-fade-in">
-      {/* Chat Area */}
-      <Card className="flex-1 flex flex-col">
+    <div className="space-y-4 animate-fade-in">
+      {/* Warning Banner */}
+      <Alert variant="default" className="border-warning/50 bg-warning/10">
+        <AlertTriangle className="h-4 w-4 text-warning" />
+        <AlertDescription className="text-sm text-foreground">
+          <strong className="font-semibold">Feature Preview:</strong> This AI Skill Coach functionality is currently under development and serves as a preview of an upcoming feature. The interface and responses are simulated for demonstration purposes only.
+        </AlertDescription>
+      </Alert>
+
+      <div className="h-[calc(100vh-12rem)] flex gap-6">
+        {/* Chat Area */}
+        <Card className="flex-1 flex flex-col">
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
@@ -319,34 +330,24 @@ Try asking "How can I reach 100% match?" or "What certifications should I get?"`
       </Card>
 
       {/* Sidebar */}
-      <div className="w-80 hidden lg:block space-y-4">
+      <div className="w-80 hidden lg:block space-y-3 flex-shrink-0">
         {/* Jobs with Skill Gaps */}
         <Card>
-          <CardHeader>
+          <CardHeader className="p-3 pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Target className="w-4 h-4 text-warning" />
               Jobs Within Reach
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-3 pt-0 space-y-2">
             {jobsWithGaps.map((job) => (
               <div
                 key={job.id}
                 className="p-3 rounded-lg bg-muted/50 space-y-2"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{job.title}</p>
-                    <p className="text-xs text-muted-foreground">{job.company}</p>
-                  </div>
-                  <MatchScore score={job.matchScore} size="sm" showLabel={false} />
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {job.missingSkills.map((skill) => (
-                    <Badge key={skill} variant="outline" className="text-xs bg-warning/10 text-warning border-warning/30">
-                      {skill}
-                    </Badge>
-                  ))}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{job.title}</p>
+                  <p className="text-xs text-muted-foreground">{job.company}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -363,39 +364,27 @@ Try asking "How can I reach 100% match?" or "What certifications should I get?"`
 
         {/* Suggested Prompts */}
         <Card>
-          <CardHeader>
+          <CardHeader className="p-3 pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Lightbulb className="w-4 h-4 text-primary" />
               Try Asking
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="p-3 pt-0 space-y-1">
             {suggestedPrompts.map((prompt, index) => (
               <Button
                 key={index}
                 variant="ghost"
-                className="w-full justify-start text-left h-auto py-2.5 px-3"
+                className="w-full justify-start text-left h-auto py-2 px-2 whitespace-normal"
                 onClick={() => handleSend(prompt.text)}
               >
-                <prompt.icon className="w-4 h-4 mr-2 text-primary flex-shrink-0" />
-                <span className="text-xs">{prompt.text}</span>
+                <prompt.icon className="w-4 h-4 mr-2 text-primary flex-shrink-0 mt-0.5" />
+                <span className="text-xs text-left break-words">{prompt.text}</span>
               </Button>
             ))}
           </CardContent>
         </Card>
-
-        {/* Quick Actions */}
-        <Card className="bg-gradient-to-br from-primary/5 to-accent/5 border-primary/20">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium mb-3">Ready to update your profile?</p>
-            <Link to="/candidate/profile">
-              <Button className="w-full gap-2" variant="outline">
-                <FileText className="w-4 h-4" />
-                Update CV
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+      </div>
       </div>
     </div>
   );

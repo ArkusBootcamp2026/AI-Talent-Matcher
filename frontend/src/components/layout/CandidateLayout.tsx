@@ -30,7 +30,7 @@ export function CandidateLayout() {
           <header className="h-16 border-b border-border flex items-center justify-between px-6 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="lg:hidden" />
-              <div className="relative hidden sm:block">
+              <div className="relative hidden">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="Search jobs, companies..."

@@ -907,10 +907,10 @@ def get_all_applications_for_recruiter(
             )
 
     try:
-        # First, get all job IDs and titles owned by recruiter
+        # First, get all job IDs, titles, and employment types owned by recruiter
         jobs_response = (
             supabase.table("job_position")
-            .select("id, job_title")
+            .select("id, job_title, employment_type")
             .eq("recruiter_profile_id", recruiter["id"])
             .execute()
         )
@@ -920,6 +920,7 @@ def get_all_applications_for_recruiter(
         
         job_ids = [job["id"] for job in jobs_response.data]
         job_titles_map = {job["id"]: job["job_title"] for job in jobs_response.data}
+        job_employment_types_map = {job["id"]: job.get("employment_type") for job in jobs_response.data}
         
         if job_id:
             job_ids = [job_id]  # Filter to specific job if provided
@@ -1116,6 +1117,7 @@ def get_all_applications_for_recruiter(
                 "cover_letter": row["cover_letter"],
                 "job_position_id": row["job_position_id"],
                 "job_title": job_titles_map.get(row["job_position_id"], ""),
+                "employment_type": job_employment_types_map.get(row["job_position_id"]),
                 "cv_file_timestamp": row.get("cv_file_timestamp"),
                 "cv_file_path": row.get("cv_file_path"),
                 "start_date": row.get("start_date"),

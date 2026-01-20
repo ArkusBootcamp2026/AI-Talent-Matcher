@@ -265,7 +265,7 @@ def delete_job(
 # Public endpoints
 # ---------------------------------------------------------------------
 
-@router.get("/")
+@router.get("")
 def list_open_jobs(supabase: Client = Depends(get_supabase)):
     """
     Returns all open job positions with recruiter company information.

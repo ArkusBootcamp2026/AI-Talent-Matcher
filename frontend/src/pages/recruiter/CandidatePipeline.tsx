@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueries, useQueryClient, useMutation } from "@tanstack/react-query";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
@@ -8,8 +8,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { MatchScore } from "@/components/shared/MatchScore";
 import { SkillTag } from "@/components/shared/SkillTag";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search,
@@ -22,6 +25,7 @@ import {
   UserCheck,
   XCircle,
   FileText,
+  Heart,
 } from "lucide-react";
 import { getAllRecruiterApplications, updateApplicationStatus, getCandidateCV } from "@/services/api";
 import type { JobApplication, CVExtractionResponse } from "@/types/api";
@@ -31,14 +35,47 @@ export default function CandidatePipeline() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("score");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("match-desc");
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [savedCandidates, setSavedCandidates] = useState<string[]>([]);
 
   const { data: applications = [], isLoading } = useQuery<JobApplication[]>({
     queryKey: ["recruiterApplications"],
     queryFn: () => getAllRecruiterApplications(),
     refetchInterval: 10000, // Auto-refresh every 10 seconds to show updated match scores
   });
+
+  // Load saved candidates from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("recruiter_saved_candidates");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setSavedCandidates(parsed);
+        }
+      } catch (error) {
+        console.error("Failed to parse saved candidates from localStorage", error);
+      }
+    }
+  }, []);
+
+  // Save to localStorage whenever savedCandidates changes
+  useEffect(() => {
+    localStorage.setItem("recruiter_saved_candidates", JSON.stringify(savedCandidates));
+  }, [savedCandidates]);
+
+  const toggleSaveCandidate = (candidateId: string) => {
+    setSavedCandidates((prev) => {
+      if (prev.includes(candidateId)) {
+        return prev.filter((id) => id !== candidateId);
+      } else {
+        return [...prev, candidateId];
+      }
+    });
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: ({ applicationId, status }: { applicationId: number; status: string }) =>
@@ -118,6 +155,15 @@ export default function CandidatePipeline() {
     }
   };
 
+  const toTitleCase = (str: string): string => {
+    if (!str) return str;
+    return str
+      .toLowerCase()
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  };
+
   const parseSkills = (skillsString: string | null | undefined): string[] => {
     if (!skillsString) return [];
     return skillsString.split(",").map((s) => s.trim()).filter(Boolean);
@@ -173,6 +219,15 @@ export default function CandidatePipeline() {
     })),
   });
 
+  // Track CV loading state - check if any CV queries are still loading
+  const isLoadingCVs = useMemo(() => {
+    return cvQueries.some((query) => query.isLoading || query.isFetching);
+  }, [cvQueries]);
+
+  // Show initial loading state only when applications are loading
+  // CV loading will be handled with skeletons
+  const isInitialLoading = isLoading && applications.length === 0;
+
   // Create a map of candidate ID to CV data
   const cvDataMap = useMemo(() => {
     const map = new Map<string, CVExtractionResponse>();
@@ -224,7 +279,9 @@ export default function CandidatePipeline() {
       const cvData = cvDataMap.get(app.candidate.id);
       
       // Extract name from CV (priority) or application
-      const name = cvData?.cv_data?.identity?.full_name || app.candidate.full_name || "Unknown";
+      const rawName = cvData?.cv_data?.identity?.full_name || app.candidate.full_name || "Unknown";
+      // Convert to Title Case (Camel Case) to avoid all uppercase
+      const name = toTitleCase(rawName);
       
       // Use match_score from application (0.0 to 1.0), convert to percentage (0-100)
       // If match_score is not available yet (NULL), it means calculation is in progress
@@ -308,31 +365,45 @@ export default function CandidatePipeline() {
   }, [applications, cvDataMap]);
 
   const filteredCandidates = useMemo(() => {
-    return candidates
-      .filter((c) => {
-        const matchesSearch =
-          c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.appliedFor.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()));
-        const matchesStatus = filterStatus === "all" || c.status === filterStatus;
-        return matchesSearch && matchesStatus;
-      })
-      .sort((a, b) => {
-        if (sortBy === "score") return b.score - a.score;
-        if (sortBy === "date") return new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime();
-        return a.name.localeCompare(b.name);
-      });
-  }, [candidates, searchQuery, filterStatus, sortBy]);
+    let filtered = candidates.filter((c) => {
+      const matchesSearch =
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.appliedFor.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.skills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = filterStatus === "all" || c.status === filterStatus;
+      
+      // Employment type filter
+      const app = applications.find((a) => a.application_id === c.applicationId);
+      const matchesEmploymentType = typeFilter === "all" || !typeFilter ||
+        app?.employment_type?.toLowerCase() === typeFilter.toLowerCase();
+      
+      // Saved candidates filter
+      const matchesSaved = !showSavedOnly || savedCandidates.includes(c.candidateId);
+      
+      return matchesSearch && matchesStatus && matchesEmploymentType && matchesSaved;
+    });
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    );
-  }
+    // Sort by match score
+    if (sortBy === "match-desc") {
+      filtered.sort((a, b) => {
+        const scoreA = a.score !== null ? a.score : -1;
+        const scoreB = b.score !== null ? b.score : -1;
+        return scoreB - scoreA; // High to Low
+      });
+    } else if (sortBy === "match-asc") {
+      filtered.sort((a, b) => {
+        const scoreA = a.score !== null ? a.score : 999;
+        const scoreB = b.score !== null ? b.score : 999;
+        return scoreA - scoreB; // Low to High
+      });
+    } else if (sortBy === "date") {
+      filtered.sort((a, b) => new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime());
+    } else if (sortBy === "name") {
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return filtered;
+  }, [candidates, searchQuery, filterStatus, typeFilter, showSavedOnly, savedCandidates, sortBy, applications]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -344,45 +415,73 @@ export default function CandidatePipeline() {
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or skill..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="flex gap-2">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[140px]">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="new">New</SelectItem>
-              <SelectItem value="reviewed">Reviewed</SelectItem>
-              <SelectItem value="shortlisted">Shortlisted</SelectItem>
-              <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[140px]">
-              <ArrowUpDown className="w-4 h-4 mr-2" />
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="score">Match Score</SelectItem>
-              <SelectItem value="date">Applied Date</SelectItem>
-              <SelectItem value="name">Name</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      {/* Search & Filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by job title or skill..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Select value={filterStatus || "all"} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[140px]">
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="reviewed">Reviewed</SelectItem>
+                  <SelectItem value="shortlisted">Shortlisted</SelectItem>
+                  <SelectItem value="accepted">Accepted</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={typeFilter || "all"} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <Briefcase className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Job Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="full-time">Full-time</SelectItem>
+                  <SelectItem value="part-time">Part-time</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="freelance">Freelance</SelectItem>
+                  <SelectItem value="internship">Internship</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[140px]">
+                  <ArrowUpDown className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="match-desc">High to Low</SelectItem>
+                  <SelectItem value="match-asc">Low to High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <Checkbox
+              id="saved"
+              checked={showSavedOnly}
+              onCheckedChange={(checked) => setShowSavedOnly(checked as boolean)}
+            />
+            <Label htmlFor="saved" className="text-sm cursor-pointer flex items-center gap-2">
+              <Heart className="w-4 h-4" />
+              Show saved candidates only
+            </Label>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Results Count */}
       <p className="text-sm text-muted-foreground">
@@ -391,12 +490,57 @@ export default function CandidatePipeline() {
 
       {/* Candidates List */}
       <div className="space-y-3">
-        {filteredCandidates.map((candidate, index) => (
-          <Card
-            key={candidate.id}
-            className="hover-lift animate-fade-in"
-            style={{ animationDelay: `${index * 0.05}s` }}
-          >
+        {isInitialLoading || isLoadingCVs ? (
+          // Show skeleton loaders while data loads
+          Array.from({ length: Math.max(5, filteredCandidates.length || 5) }).map((_, index) => (
+            <Card key={`skeleton-${index}`} className="animate-fade-in">
+              <CardContent className="p-4">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  {/* Match Score Skeleton */}
+                  <div className="flex lg:flex-col items-center justify-center">
+                    <Skeleton className="w-16 h-16 rounded-full" />
+                  </div>
+                  {/* Candidate Info Skeleton */}
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <Skeleton className="w-12 h-12 rounded-full" />
+                        <div className="space-y-2">
+                          <Skeleton className="h-5 w-48" />
+                          <Skeleton className="h-4 w-64" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-4 w-36" />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                  {/* Actions Skeleton */}
+                  <div className="flex lg:flex-col gap-2 lg:justify-center lg:min-w-[140px]">
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                    <Skeleton className="h-9 w-full" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          filteredCandidates.map((candidate, index) => (
+            <Card
+              key={candidate.id}
+              className="hover-lift animate-fade-in"
+              style={{ animationDelay: `${index * 0.05}s` }}
+            >
             <CardContent className="p-4">
               <div className="flex flex-col lg:flex-row gap-4">
                 {/* Match Score - Left Section */}
@@ -537,7 +681,8 @@ export default function CandidatePipeline() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          ))
+        )}
       </div>
 
       {filteredCandidates.length === 0 && (

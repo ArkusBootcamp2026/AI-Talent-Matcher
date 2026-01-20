@@ -171,6 +171,7 @@ export interface JobApplication {
   cover_letter?: string;
   job_position_id?: number;
   job_title?: string;
+  employment_type?: string;
   start_date?: string; // Start date for hired candidates (ISO date string)
   match_score?: number; // AI-calculated match score (0.0 to 1.0)
   candidate: {

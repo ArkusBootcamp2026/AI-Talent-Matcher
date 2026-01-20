@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JobDetailsModal } from "@/components/candidate/JobDetailsModal";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +17,6 @@ import {
   FileText,
   CheckCircle,
   XCircle,
-  MessageSquare,
   ChevronRight,
   Briefcase,
 } from "lucide-react";
@@ -294,83 +294,90 @@ export default function Applications() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header + Stats */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">My Applications</h1>
-          <p className="text-muted-foreground mt-1">
-            Track the status of your job applications
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 md:w-auto md:min-w-[320px]">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-3xl font-bold">{stats.total}</p>
-              <p className="text-sm text-muted-foreground">Total Applications</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-3xl font-bold text-primary">{stats.active}</p>
-              <p className="text-sm text-muted-foreground">Active</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-3xl font-bold text-success">{stats.offers}</p>
-              <p className="text-sm text-muted-foreground">Hired</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-3xl font-bold text-muted-foreground">{stats.rejected}</p>
-              <p className="text-sm text-muted-foreground">Rejected</p>
-            </CardContent>
-          </Card>
+      {/* Header */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">My Applications</h1>
+            <p className="text-muted-foreground mt-1">
+              Track the status of your job applications
+            </p>
+          </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="all">All ({stats.total})</TabsTrigger>
+              <TabsTrigger value="active">Active ({stats.active})</TabsTrigger>
+              <TabsTrigger value="offers">Hired ({stats.offers})</TabsTrigger>
+              <TabsTrigger value="rejected">Rejected ({stats.rejected})</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       </div>
 
-      {/* Filters */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">All ({stats.total})</TabsTrigger>
-          <TabsTrigger value="active">Active ({stats.active})</TabsTrigger>
-          <TabsTrigger value="offers">Hired ({stats.offers})</TabsTrigger>
-          <TabsTrigger value="rejected">Rejected ({stats.rejected})</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
       {/* Applications List */}
-      {isLoading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredApplications.map((app, index) => (
+      <div className="space-y-4">
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, index) => (
+            <Card key={`skeleton-${index}`} className="animate-fade-in">
+              <CardContent className="px-4 py-4">
+                <div className="flex flex-col lg:flex-row gap-6">
+                  <div className="flex-1 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                    <Skeleton className="h-10 w-full" />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-12" />
+                      </div>
+                      <Skeleton className="h-2 w-full" />
+                      <div className="flex justify-between mt-3">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="flex flex-col items-center">
+                            <Skeleton className="h-6 w-6 rounded-full mb-1" />
+                            <Skeleton className="h-3 w-16 mb-1" />
+                            <Skeleton className="h-2 w-12" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex lg:flex-col gap-2 lg:min-w-[140px]">
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          filteredApplications.map((app, index) => (
             <Card
               key={app.id}
               className="hover-lift animate-fade-in"
               style={{ animationDelay: `${index * 0.05}s` }}
             >
-              <CardContent className="p-6">
+              <CardContent className="px-4 py-4">
                 <div className="flex flex-col lg:flex-row gap-6">
                   {/* Main Info */}
                   <div className="flex-1 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-lg font-semibold">{app.job_title || "Unknown Position"}</h3>
-                        <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                          <Building className="w-4 h-4" />
-                          <span>{app.company_name || "Unknown Company"}</span>
-                        </div>
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-semibold leading-tight">{app.job_title || "Unknown Position"}</h3>
+                      <span className="text-muted-foreground">•</span>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Building className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{app.company_name || "Unknown Company"}</span>
                       </div>
-                      {getStatusBadge(app.status)}
                     </div>
 
                     {/* Details */}
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground leading-tight">
                       {app.location && (
                         <span className="flex items-center gap-1">
                           <MapPin className="w-4 h-4" />
@@ -390,7 +397,7 @@ export default function Applications() {
                     </div>
 
                     {/* Status Message Box */}
-                    <div className={`flex items-center gap-2 p-3 rounded-lg ${app.statusMessageColor}`}>
+                    <div className={`flex items-center gap-2 h-10 px-3 rounded-lg ${app.statusMessageColor}`}>
                       {app.status === "hired" ? (
                         <CheckCircle className="w-4 h-4" />
                       ) : app.status === "rejected" ? (
@@ -451,7 +458,7 @@ export default function Applications() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex lg:flex-col gap-2 lg:justify-center lg:min-w-[140px]">
+                  <div className="flex lg:flex-col gap-2 lg:justify-start lg:min-w-[140px] lg:mt-[4.5rem]">
                     {app.status === "hired" && (
                       <div className="flex flex-col gap-2 w-full">
                         <Button
@@ -462,7 +469,7 @@ export default function Applications() {
                         </Button>
                         <Button
                           variant="outline"
-                          className="flex-1 lg:flex-none gap-2"
+                          className="w-full gap-2"
                           onClick={() => handleViewJob(app)}
                         >
                           <FileText className="w-4 h-4" />
@@ -471,25 +478,19 @@ export default function Applications() {
                       </div>
                     )}
                     {app.status !== "rejected" && app.status !== "hired" && (
-                      <>
-                        <Button variant="outline" className="flex-1 lg:flex-none gap-2">
-                          <MessageSquare className="w-4 h-4" />
-                          Message
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="flex-1 lg:flex-none gap-2"
-                          onClick={() => handleViewJob(app)}
-                        >
-                          <FileText className="w-4 h-4" />
-                          View Job
-                        </Button>
-                      </>
+                      <Button
+                        variant="outline"
+                        className="w-full gap-2"
+                        onClick={() => handleViewJob(app)}
+                      >
+                        <FileText className="w-4 h-4" />
+                        View Job
+                      </Button>
                     )}
                     {app.status === "rejected" && (
                       <Link to="/candidate/jobs">
                         <Button variant="outline" className="w-full gap-2">
-                          Find Similar Jobs
+                          Similar Jobs
                           <ChevronRight className="w-4 h-4" />
                         </Button>
                       </Link>
@@ -498,9 +499,9 @@ export default function Applications() {
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
 
       {!isLoading && filteredApplications.length === 0 && (
         <div className="text-center py-12">

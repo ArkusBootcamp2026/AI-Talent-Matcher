@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AILoadingIndicator } from "@/components/shared/AILoadingIndicator";
 import {
   Send,
@@ -15,6 +16,7 @@ import {
   Users,
   Code,
   TrendingUp,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Message {
@@ -97,17 +99,26 @@ export default function Chatbot() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-6 animate-fade-in">
-      {/* Chat Area */}
-      <Card className="flex-1 flex flex-col">
-        <CardHeader className="border-b">
+    <div className="space-y-4 animate-fade-in">
+      {/* Warning Banner */}
+      <Alert variant="default" className="border-warning/50 bg-warning/10">
+        <AlertTriangle className="h-4 w-4 text-warning" />
+        <AlertDescription className="text-sm text-foreground">
+          <strong className="font-semibold">Feature Preview:</strong> This AI Chatbot functionality is currently under development and serves as a preview of an upcoming feature. The interface and responses are simulated for demonstration purposes only.
+        </AlertDescription>
+      </Alert>
+
+      <div className="h-[calc(100vh-12rem)] flex gap-6">
+        {/* Chat Area */}
+        <Card className="flex-1 flex flex-col">
+        <CardHeader className="border-b p-4 pb-3">
           <CardTitle className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-              <Brain className="w-6 h-6 text-primary-foreground" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+              <Brain className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">AI Recruitment Assistant</h2>
-              <p className="text-sm text-muted-foreground font-normal">
+              <h2 className="text-base font-semibold">AI Recruitment Assistant</h2>
+              <p className="text-xs text-muted-foreground font-normal">
                 Query your candidate database with natural language
               </p>
             </div>
@@ -211,34 +222,34 @@ export default function Chatbot() {
       </Card>
 
       {/* Sidebar - Suggested Prompts */}
-      <div className="w-80 hidden lg:block space-y-4">
+      <div className="w-80 hidden lg:block space-y-3 flex-shrink-0">
         <Card>
-          <CardHeader>
+          <CardHeader className="p-3 pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Lightbulb className="w-4 h-4 text-warning" />
               Suggested Prompts
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="p-3 pt-0 space-y-1">
             {suggestedPrompts.map((prompt, index) => (
               <Button
                 key={index}
                 variant="ghost"
-                className="w-full justify-start text-left h-auto py-3 px-3"
+                className="w-full justify-start text-left h-auto py-2 px-2 whitespace-normal"
                 onClick={() => handleSend(prompt.text)}
               >
-                <prompt.icon className="w-4 h-4 mr-3 text-primary flex-shrink-0" />
-                <span className="text-sm">{prompt.text}</span>
+                <prompt.icon className="w-4 h-4 mr-2 text-primary flex-shrink-0 mt-0.5" />
+                <span className="text-sm text-left break-words">{prompt.text}</span>
               </Button>
             ))}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="p-3 pb-2">
             <CardTitle className="text-sm">Quick Stats</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="p-3 pt-0 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Total Candidates</span>
               <span className="font-semibold">248</span>
@@ -253,6 +264,7 @@ export default function Chatbot() {
             </div>
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );

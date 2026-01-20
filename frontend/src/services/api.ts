@@ -223,6 +223,25 @@ export const getCandidateCV = async (
   return data;
 };
 
+export const downloadCandidateCV = async (
+  candidateId: string,
+  appliedAt?: string,
+  cvFileTimestamp?: string
+): Promise<Blob> => {
+  const params = new URLSearchParams();
+  if (cvFileTimestamp) {
+    params.set('cv_file_timestamp', cvFileTimestamp);
+  } else if (appliedAt) {
+    params.set('applied_at', appliedAt);
+  }
+  const queryString = params.toString();
+  const { data } = await apiClient.get<Blob>(
+    `/cv/candidate/${candidateId}/download${queryString ? `?${queryString}` : ''}`,
+    { responseType: 'blob' }
+  );
+  return data;
+};
+
 export const updateApplicationStartDate = async (
   applicationId: number,
   startDate: string

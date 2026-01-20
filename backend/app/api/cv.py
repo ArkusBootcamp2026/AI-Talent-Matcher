@@ -3,6 +3,7 @@
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi.responses import Response
 from supabase import Client
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from app.services.cv.storage_service import (
     update_parsed_cv,
     get_parsed_cv,
     get_parsed_cv_at_datetime,
+    _download_storage_file,
 )
 from app.services.cv.match_service import calculate_match_score
 from app.schemas.cv.extraction import CVExtractionResponse
@@ -537,4 +539,143 @@ async def analyze_match(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to calculate match score: {str(e)}",
+        )
+
+
+@router.get("/candidate/{candidate_id}/download")
+async def download_candidate_cv(
+    candidate_id: str,
+    applied_at: Optional[str] = Query(None, description="ISO datetime to get CV version at application time (deprecated, use cv_file_timestamp)"),
+    cv_file_timestamp: Optional[str] = Query(None, description="CV file timestamp in YYYYMMDD_HHMMSS format (exact file to retrieve)"),
+    recruiter=Depends(require_recruiter),
+    supabase: Client = Depends(get_supabase),
+):
+    """
+    Download the raw PDF CV file for a specific candidate.
+    
+    Priority order:
+    1. If cv_file_timestamp is provided, downloads the exact CV file with that timestamp
+    2. If applied_at is provided, downloads the CV version that existed at that datetime (fallback)
+    3. Otherwise, downloads the latest CV version
+    
+    This endpoint is for recruiters to download candidate CVs as PDF files.
+    Only accessible by authenticated recruiters.
+    """
+    try:
+        # Get CV response to access storage_paths (reuse the existing endpoint logic)
+        from app.services.cv.storage_service import get_parsed_cv_at_datetime, get_parsed_cv, _list_storage_files
+        from httpx import RemoteProtocolError, ConnectError, TimeoutException
+        
+        # Determine which CV file to get based on parameters
+        if cv_file_timestamp:
+            # Get CV at specific timestamp
+            from datetime import datetime
+            try:
+                # Parse timestamp format YYYYMMDD_HHMMSS
+                date_str = cv_file_timestamp[:8]  # YYYYMMDD
+                time_str = cv_file_timestamp[9:15] if len(cv_file_timestamp) > 9 else "000000"  # HHMMSS
+                target_dt = datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M%S")
+                target_dt = target_dt.replace(tzinfo=None)
+                cv_data = get_parsed_cv_at_datetime(
+                    supabase=supabase,
+                    user_id=candidate_id,
+                    target_datetime=target_dt.isoformat()
+                )
+            except Exception as e:
+                logger.error(f"Error parsing cv_file_timestamp {cv_file_timestamp}: {str(e)}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid cv_file_timestamp format: {cv_file_timestamp}",
+                )
+        elif applied_at:
+            # Get CV at application time
+            from datetime import datetime
+            try:
+                target_dt = datetime.fromisoformat(applied_at.replace('Z', '+00:00'))
+                cv_data = get_parsed_cv_at_datetime(
+                    supabase=supabase,
+                    user_id=candidate_id,
+                    target_datetime=target_dt.isoformat()
+                )
+            except Exception as e:
+                logger.error(f"Error parsing applied_at {applied_at}: {str(e)}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid applied_at format: {applied_at}",
+                )
+        else:
+            # Get latest CV
+            cv_data = get_parsed_cv(supabase=supabase, user_id=candidate_id)
+        
+        # Now get the storage paths by listing files
+        # Find the raw PDF file that matches the timestamp
+        raw_files = _list_storage_files(supabase, f"{candidate_id}/raw")
+        if not raw_files:
+            raise HTTPException(
+                status_code=404,
+                detail="Raw PDF file not found in storage",
+            )
+        
+        # Sort files to get the right one
+        def extract_timestamp(filename: str) -> str:
+            try:
+                parts = filename.split('_', 2)
+                if len(parts) >= 2:
+                    return f"{parts[0]}_{parts[1]}"
+            except:
+                pass
+            return filename
+        
+        raw_files_with_metadata = []
+        for file_info in raw_files:
+            updated_at = file_info.get("updated_at") or file_info.get("created_at")
+            raw_files_with_metadata.append((file_info, updated_at if updated_at and updated_at.strip() else ""))
+        
+        raw_files_with_metadata.sort(
+            key=lambda x: x[1] if x[1] and x[1].strip() else extract_timestamp(x[0].get("name", "")),
+            reverse=True
+        )
+        
+        # If we have a timestamp, try to find the exact match
+        raw_path = None
+        if cv_file_timestamp:
+            for file_info, _ in raw_files_with_metadata:
+                filename = file_info.get("name", "")
+                if cv_file_timestamp in filename:
+                    raw_path = f"{candidate_id}/raw/{filename}"
+                    break
+        
+        # If no exact match or no timestamp, use the latest
+        if not raw_path:
+            raw_path = f"{candidate_id}/raw/{raw_files_with_metadata[0][0]['name']}"
+        
+        # Download the PDF file from storage
+        try:
+            file_content = _download_storage_file(supabase, raw_path)
+        except Exception as e:
+            logger.error(f"Failed to download PDF file from {raw_path}: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to download PDF file: {str(e)}",
+            )
+        
+        # Extract filename from path
+        filename = raw_path.split("/")[-1] if "/" in raw_path else f"{candidate_id}_cv.pdf"
+        
+        # Return PDF file as download
+        return Response(
+            content=file_content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CV download error for candidate {candidate_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download CV: {str(e)}",
         )

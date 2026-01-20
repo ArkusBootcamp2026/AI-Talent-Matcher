@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +31,10 @@ import {
   Edit,
   Eye,
   Trash2,
+  ArrowUpDown,
+  Heart,
+  Bookmark,
+  BookmarkCheck,
 } from "lucide-react";
 import { getMyJobs, deleteJob } from "@/services/api";
 import { toast } from "sonner";
@@ -34,6 +42,11 @@ import type { JobPosition } from "@/types/api";
 
 export default function Vacancies() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("recent");
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
+  const [savedJobs, setSavedJobs] = useState<number[]>([]);
   const [activeTab, setActiveTab] = useState("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<JobPosition | null>(null);
@@ -44,6 +57,26 @@ export default function Vacancies() {
     queryKey: ["myJobs"],
     queryFn: getMyJobs,
   });
+
+  // Load saved jobs from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("recruiter_saved_jobs");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setSavedJobs(parsed);
+        }
+      } catch (error) {
+        console.error("Failed to parse saved jobs from localStorage", error);
+      }
+    }
+  }, []);
+
+  // Save to localStorage whenever savedJobs changes
+  useEffect(() => {
+    localStorage.setItem("recruiter_saved_jobs", JSON.stringify(savedJobs));
+  }, [savedJobs]);
 
   const handleDeleteClick = (job: JobPosition) => {
     setJobToDelete(job);
@@ -88,22 +121,66 @@ export default function Vacancies() {
     return skillsString.split(",").map((s) => s.trim()).filter(Boolean);
   };
 
-  const filteredVacancies = jobs.filter((job) => {
-    const matchesSearch =
-      job.job_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.location?.toLowerCase().includes(searchQuery.toLowerCase());
+  const toggleSaveJob = (jobId: number) => {
+    setSavedJobs((prev) => {
+      if (prev.includes(jobId)) {
+        return prev.filter((id) => id !== jobId);
+      } else {
+        return [...prev, jobId];
+      }
+    });
+  };
+
+  const filteredVacancies = useMemo(() => {
+    let filtered = jobs.filter((job) => {
+      // Search filter
+      const searchLower = searchQuery.toLowerCase().trim();
+      const skills = parseSkills(job.job_skills);
+      const matchesSearch = !searchLower ||
+        job.job_title?.toLowerCase().includes(searchLower) ||
+        skills.some((skill) => skill.toLowerCase().includes(searchLower));
+      
+      // Location filter
+      const locationLower = locationFilter.toLowerCase().trim();
+      const matchesLocation = !locationLower ||
+        job.location?.toLowerCase().includes(locationLower);
+      
+      // Employment type filter
+      const matchesType = typeFilter === "all" ||
+        job.employment_type?.toLowerCase() === typeFilter.toLowerCase();
+      
+      // Status filter (tab)
+      const statusMap: Record<string, string> = {
+        open: "active",
+        draft: "draft",
+        closed: "closed",
+      };
+      const jobStatus = statusMap[job.status] || job.status;
+      const matchesTab = activeTab === "all" || jobStatus === activeTab;
+      
+      // Saved jobs filter
+      const matchesSaved = !showSavedOnly || savedJobs.includes(job.id);
+      
+      return matchesSearch && matchesLocation && matchesType && matchesTab && matchesSaved;
+    });
     
-    const statusMap: Record<string, string> = {
-      open: "active",
-      draft: "draft",
-      closed: "closed",
-    };
+    // Sort
+    if (sortBy === "recent") {
+      filtered.sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateB - dateA; // Most recent first
+      });
+    } else if (sortBy === "oldest") {
+      filtered.sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return dateA - dateB; // Oldest first
+      });
+    }
     
-    const jobStatus = statusMap[job.status] || job.status;
-    const matchesTab = activeTab === "all" || jobStatus === activeTab;
-    
-    return matchesSearch && matchesTab;
-  });
+    return filtered;
+  }, [jobs, searchQuery, locationFilter, typeFilter, activeTab, sortBy, showSavedOnly, savedJobs]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -132,16 +209,6 @@ export default function Vacancies() {
   const draftJobs = jobs.filter((j) => j.status === "draft");
   const closedJobs = jobs.filter((j) => j.status === "closed");
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -152,40 +219,92 @@ export default function Vacancies() {
             Manage your job postings and track applications
           </p>
         </div>
-        <Link to="/recruiter/vacancies/new">
-          <Button className="gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90">
-            <Plus className="w-4 h-4" />
-            Create Vacancy
-          </Button>
-        </Link>
+        <div className="flex items-center gap-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="all">All ({jobs.length})</TabsTrigger>
+              <TabsTrigger value="active">
+                Active ({activeJobs.length})
+              </TabsTrigger>
+              <TabsTrigger value="draft">
+                Draft ({draftJobs.length})
+              </TabsTrigger>
+              <TabsTrigger value="closed">
+                Closed ({closedJobs.length})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Link to="/recruiter/vacancies/new">
+            <Button className="gap-2 bg-gradient-to-r from-primary to-secondary hover:opacity-90">
+              <Plus className="w-4 h-4" />
+              Create Vacancy
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search vacancies..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="all">All ({jobs.length})</TabsTrigger>
-            <TabsTrigger value="active">
-              Active ({activeJobs.length})
-            </TabsTrigger>
-            <TabsTrigger value="draft">
-              Draft ({draftJobs.length})
-            </TabsTrigger>
-            <TabsTrigger value="closed">
-              Closed ({closedJobs.length})
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      {/* Search & Filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by job title or skill..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
+                <Input
+                  placeholder="Location"
+                  value={locationFilter}
+                  onChange={(e) => setLocationFilter(e.target.value)}
+                  className="pl-10 w-40"
+                />
+              </div>
+              <Select value={typeFilter || "all"} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <Briefcase className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Job Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="full-time">Full-time</SelectItem>
+                  <SelectItem value="part-time">Part-time</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="freelance">Freelance</SelectItem>
+                  <SelectItem value="internship">Internship</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[140px]">
+                  <ArrowUpDown className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Most Recent</SelectItem>
+                  <SelectItem value="oldest">Oldest</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <Checkbox
+              id="saved"
+              checked={showSavedOnly}
+              onCheckedChange={(checked) => setShowSavedOnly(checked as boolean)}
+            />
+            <Label htmlFor="saved" className="text-sm cursor-pointer flex items-center gap-2">
+              <Heart className="w-4 h-4" />
+              Show saved jobs only
+            </Label>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Vacancies List */}
       <div className="space-y-4">
@@ -215,6 +334,20 @@ export default function Vacancies() {
                           >
                             {job.job_title}
                           </Link>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              toggleSaveJob(job.id);
+                            }}
+                            className="p-1 hover:bg-muted rounded transition-colors"
+                            aria-label={savedJobs.includes(job.id) ? "Remove bookmark" : "Bookmark job"}
+                          >
+                            {savedJobs.includes(job.id) ? (
+                              <BookmarkCheck className="w-4 h-4 text-primary fill-primary" />
+                            ) : (
+                              <Bookmark className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                            )}
+                          </button>
                           <Badge variant="outline" className={getStatusColor(jobStatus)}>
                             {jobStatus}
                           </Badge>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -33,7 +34,7 @@ export default function JobSearch() {
   const [searchQuery, setSearchQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("recent");
+  const [sortBy, setSortBy] = useState("most-recent");
   const [savedJobs, setSavedJobs] = useState<number[]>([]);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [applyingJobId, setApplyingJobId] = useState<number | null>(null);
@@ -162,29 +163,19 @@ export default function JobSearch() {
         return matchesSearch && matchesLocation && matchesType && matchesSaved;
       })
       .sort((a, b) => {
-        if (sortBy === "recent") {
+        if (sortBy === "most-recent") {
           const dateA = a.created_at ? parseISO(a.created_at).getTime() : 0;
           const dateB = b.created_at ? parseISO(b.created_at).getTime() : 0;
           return dateB - dateA; // Most recent first
         }
-        if (sortBy === "score") {
-          // For match score, we'll keep a placeholder value of 0 for now
-          // This will be updated later when match score is implemented
-          return 0;
+        if (sortBy === "oldest") {
+          const dateA = a.created_at ? parseISO(a.created_at).getTime() : 0;
+          const dateB = b.created_at ? parseISO(b.created_at).getTime() : 0;
+          return dateA - dateB; // Oldest first
         }
         return 0;
       });
   }, [jobs, searchQuery, locationFilter, typeFilter, showSavedOnly, savedJobs, sortBy]);
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -239,8 +230,8 @@ export default function JobSearch() {
                   <SelectValue placeholder="Sort" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="recent">Most Recent</SelectItem>
-                  <SelectItem value="score">Match Score</SelectItem>
+                  <SelectItem value="most-recent">Most Recent</SelectItem>
+                  <SelectItem value="oldest">Oldest</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -268,7 +259,43 @@ export default function JobSearch() {
 
       {/* Jobs List */}
       <div className="space-y-4">
-        {filteredJobs.map((job, index) => {
+        {isLoading ? (
+          Array.from({ length: 5 }).map((_, index) => (
+            <Card key={`skeleton-${index}`} className="animate-fade-in">
+              <CardContent className="p-4">
+                <div className="flex flex-col lg:flex-row gap-6">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <Skeleton className="h-6 w-64 mb-2" />
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                      </div>
+                      <Skeleton className="h-8 w-8 rounded" />
+                    </div>
+                    <div className="flex flex-wrap gap-4">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                  <div className="flex lg:flex-col gap-2 lg:min-w-[140px]">
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : (
+          filteredJobs.map((job, index) => {
           const skills = parseSkills(job.job_skills);
           const displaySkills = skills.slice(0, 5);
           const remainingSkills = skills.length - displaySkills.length;
@@ -281,67 +308,67 @@ export default function JobSearch() {
               className="hover-lift animate-fade-in"
               style={{ animationDelay: `${index * 0.05}s` }}
             >
-              <CardContent className="p-6">
-                <div className="flex flex-col lg:flex-row gap-6">
+              <CardContent className="p-4">
+                <div className="flex flex-col lg:flex-row gap-4">
                   {/* Job Info */}
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <button
                             onClick={() => handleViewDetails(job)}
-                            className="text-xl font-semibold hover:text-primary transition-colors text-left"
+                            className="text-lg font-semibold hover:text-primary transition-colors text-left"
                           >
                             {job.job_title}
                           </button>
+                          {job.company_name && (
+                            <>
+                              <span className="text-muted-foreground">•</span>
+                              <span className="text-sm text-muted-foreground flex items-center gap-1">
+                                <Building className="w-3.5 h-3.5" />
+                                {job.company_name}
+                              </span>
+                            </>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => toggleSaveJob(job.id)}
-                            className={`h-8 w-8 ${savedJobs.includes(job.id) ? "text-primary" : ""}`}
+                            className={`h-7 w-7 flex-shrink-0 ${savedJobs.includes(job.id) ? "text-primary" : ""}`}
                           >
                             {savedJobs.includes(job.id) ? (
-                              <BookmarkCheck className="w-5 h-5" />
+                              <BookmarkCheck className="w-4 h-4" />
                             ) : (
-                              <Bookmark className="w-5 h-5" />
+                              <Bookmark className="w-4 h-4" />
                             )}
                           </Button>
                         </div>
-                        {job.company_name && (
-                          <div className="flex items-center gap-2 text-muted-foreground mt-1">
-                            <Building className="w-4 h-4" />
-                            <span className="font-medium">{job.company_name}</span>
-                          </div>
-                        )}
                       </div>
                     </div>
 
                     {/* Details */}
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       {job.location && (
                         <span className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
+                          <MapPin className="w-3.5 h-3.5" />
                           {job.location}
                         </span>
                       )}
                       {job.employment_type && (
                         <span className="flex items-center gap-1">
-                          <Briefcase className="w-4 h-4" />
+                          <Briefcase className="w-3.5 h-3.5" />
                           {job.employment_type}
-                          {salaryDisplay && (
-                            <>
-                              <span className="mx-1">•</span>
-                              <span className="flex items-center gap-1 font-medium text-foreground">
-                                <DollarSign className="w-4 h-4" />
-                                {salaryDisplay}
-                              </span>
-                            </>
-                          )}
+                        </span>
+                      )}
+                      {salaryDisplay && (
+                        <span className="flex items-center gap-1 font-medium text-foreground">
+                          <DollarSign className="w-3.5 h-3.5" />
+                          {salaryDisplay}
                         </span>
                       )}
                       {postedDate && (
                         <span className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
+                          <Clock className="w-3.5 h-3.5" />
                           {postedDate}
                         </span>
                       )}
@@ -349,14 +376,14 @@ export default function JobSearch() {
 
                     {/* Description - Maximum 2 lines with ellipsis */}
                     {job.job_description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                         {job.job_description}
                       </p>
                     )}
 
                     {/* Skills */}
                     {displaySkills.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5 mt-1">
                         {displaySkills.map((skill) => (
                           <SkillTag key={skill} skill={skill} className="text-xs" />
                         ))}
@@ -400,7 +427,8 @@ export default function JobSearch() {
               </CardContent>
             </Card>
           );
-        })}
+        })
+        )}
       </div>
 
       {filteredJobs.length === 0 && (
