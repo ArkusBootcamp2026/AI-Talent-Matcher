@@ -5,13 +5,16 @@ from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
-# Try to import PyMuPDF as fallback
+# Try to import PyMuPDF as fallback (optional dependency)
+# Protected with try/except to prevent runtime errors if pymupdf is not installed
+PYMUPDF_AVAILABLE = False
 try:
-    import fitz  # PyMuPDF
+    import fitz  # PyMuPDF - optional dependency
     PYMUPDF_AVAILABLE = True
 except ImportError:
+    # PyMuPDF is optional - pypdf is the primary PDF library
     PYMUPDF_AVAILABLE = False
-    logger.warning("PyMuPDF (fitz) not available. Install with: pip install pymupdf")
+    logger.debug("PyMuPDF (fitz) not available. Install with: pip install pymupdf")
 
 
 def extract_text_from_pdf(pdf_content: bytes) -> str:
@@ -92,10 +95,13 @@ def extract_text_from_pdf(pdf_content: bytes) -> str:
                     )
         
         # If first page failed, try PyMuPDF as fallback
+        # Only attempt if PyMuPDF was successfully imported at module level
         if first_page_failed and PYMUPDF_AVAILABLE:
             logger.warning("Attempting to extract first page using PyMuPDF fallback...")
             try:
                 pdf_file.seek(0)
+                # fitz is already imported at module level (protected by try/except)
+                # Only reaches here if PYMUPDF_AVAILABLE is True
                 doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
                 if len(doc) > 0:
                     first_page = doc[0]
@@ -120,6 +126,10 @@ def extract_text_from_pdf(pdf_content: bytes) -> str:
                             except Exception as e:
                                 logger.warning(f"PyMuPDF: Error extracting page {i + 1}: {str(e)}")
                     doc.close()
+            except ImportError as import_error:
+                # Handle case where fitz import fails at runtime
+                logger.warning(f"PyMuPDF import failed at runtime: {str(import_error)}")
+                PYMUPDF_AVAILABLE = False  # Update flag to prevent future attempts
             except Exception as pymupdf_error:
                 logger.error(f"PyMuPDF fallback also failed: {str(pymupdf_error)}")
         elif first_page_failed and not PYMUPDF_AVAILABLE:

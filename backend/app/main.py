@@ -79,18 +79,14 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # CORS configuration for frontend
 # Allow all localhost variations for development
+allowed_origins = [
+    "http://localhost:5173",              # Vite local
+    "https://ai-talent-matcher.vercel.app"  # producción (ajustar luego)
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "http://localhost:5173",  # Vite default port
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",  # Common React dev port
-        "http://127.0.0.1:3000",
-        "http://[::1]:8080",  # IPv6 localhost
-        "http://[::1]:5173",
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,3 +101,4 @@ app.include_router(recruiter_profiles.router)
 app.include_router(profiles.router)
 app.include_router(llm.router)
 app.include_router(cv.router)
+

@@ -23,6 +23,9 @@ class Settings:
     SUPABASE_CV_BUCKET = "cvs"
     
     # CSV Database Location
-    CSV_DB_DIR = Path(__file__).parent.parent.parent / "data" / "db"
+    # Path structure: backend/app/core/config.py
+    # We need to go up 2 levels: core/ -> app/
+    # Then to app/data/db/
+    CSV_DB_DIR = Path(__file__).parent.parent / "data" / "db"
 
 settings = Settings()

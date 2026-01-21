@@ -3,7 +3,7 @@
 import axios, { AxiosError, AxiosInstance } from 'axios';
 import { getToken, removeToken } from './auth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_BASE_URL;
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,

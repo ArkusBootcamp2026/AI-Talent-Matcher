@@ -28,7 +28,7 @@ router = APIRouter(prefix="/jobs", tags=["Jobs"])
 # Recruiter-side endpoints
 # ---------------------------------------------------------------------
 
-@router.post("/", status_code=201)
+@router.post("", status_code=201)
 def create_job(
     payload: JobCreate,
     recruiter=Depends(require_recruiter),
